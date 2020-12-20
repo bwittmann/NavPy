@@ -1,6 +1,0 @@
-[submodule "rto_core"]
-	path = rto_core
-	url = https://github.com/dietriro/rto_core.git
-[submodule "rto_simulation"]
-	path = rto_simulation
-	url = https://github.com/dietriro/rto_simulation.git
