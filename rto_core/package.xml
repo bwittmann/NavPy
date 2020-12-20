@@ -1,0 +1,28 @@
+<package format="2">
+  <name>rto_core</name>
+  <version>0.1.0</version>
+  <description>
+    Core ROS packages for the Robotino (meta package)
+  </description>
+  <license>Apache 2.0</license>
+  <license>BSD</license>
+  <author email="verbeek@servicerobotics.eu">Christian Verbeek</author>
+  <author email="robin.dietrich@tum.de">Robin Dietrich</author>
+  <maintainer email="robin.dietrich@tum.de">Robin Dietrich</maintainer>
+  <!-- <url type="website">http://wiki.ros.org/turtlebot3</url>
+  <url type="emanual">http://turtlebot3.robotis.com</url> -->
+  <url type="repository">https://github.com/dietriro/robotino-ros</url>
+  <url type="bugtracker">https://github.com/dietriro/robotino-ros/issues</url>
+  <buildtool_depend>catkin</buildtool_depend>
+  <!-- <exec_depend>rto_bringup</exec_depend> -->
+  <exec_depend>rto_description</exec_depend>
+  <exec_depend>rto_local_move</exec_depend>
+  <exec_depend>rto_local_planner</exec_depend>
+  <exec_depend>rto_msgs</exec_depend>
+  <exec_depend>rto_navigation</exec_depend>
+  <exec_depend>rto_node</exec_depend>
+  <exec_depend>rto_safety</exec_depend>
+  <exec_depend>rto_teleop</exec_depend>
+  
+  <export><metapackage/></export>
+</package>
