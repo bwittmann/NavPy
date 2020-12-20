@@ -1,0 +1,26 @@
+<package format="2">
+  <name>rto_safety</name>
+  <version>0.1.0</version>
+  <description>The rto_safety package</description>
+  <maintainer email="suraj.nair@tum-create.edu.sg">Suraj Nair</maintainer>
+  <maintainer email="aravind.v@tum-create.edu.sg">Aravind V</maintainer>
+  <license>BSD</license>
+  <url type="website">http://wiki.ros.org/rto_safety</url>
+  <author email="verbeek@servicerobotics.eu">Christian Verbeek</author>
+  <!-- The *_depend tags are used to specify dependencies -->
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>laser_geometry</build_depend>
+  <build_depend>rto_node</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>laser_geometry</exec_depend>
+  <exec_depend>rto_node</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+</package>

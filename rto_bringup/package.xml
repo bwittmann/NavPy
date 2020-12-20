@@ -1,0 +1,28 @@
+<package format="2">
+  <name>rto_bringup</name>
+  <version>0.0.0</version>
+  <description>The rto_bringup package</description>
+  <maintainer email="robin.dietrich@tum.de"></maintainer>
+  <author email="robin.dietrich@tum.de">Robin Dietrich</author>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>rto_node</exec_depend>
+  <exec_depend>rto_teleop</exec_depend>
+  <exec_depend>rto_description</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>urg_node</exec_depend>
+  <exec_depend>openni2_launch</exec_depend>
+  <exec_depend>rviz</exec_depend>
+  <exec_depend>compressed_image_transport</exec_depend>
+  <exec_depend>compressed_depth_image_transport</exec_depend>
+  <!-- <exec_depend>depthimage_to_laserscan</exec_depend> -->
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>

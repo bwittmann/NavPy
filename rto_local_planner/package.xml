@@ -1,0 +1,46 @@
+<package format="2">
+  <name>rto_local_planner</name>
+  <version>0.1.0</version>
+  <description>The rto_local_planner package</description>
+  <maintainer email="suraj.nair@tum-create.edu.sg">Suraj Nair</maintainer>
+  <maintainer email="aravind.v@tum-create.edu.sg">Aravind V</maintainer>
+  <license>BSD</license>
+  <url type="website">http://wiki.ros.org/rto_local_planner</url>
+  <author email="verbeek@servicerobotics.eu">Christian Verbeek</author>
+  <!-- The *_depend tags are used to specify dependencies -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>costmap_2d</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>nav_core</build_depend>
+  <build_depend>nav_msgs</build_depend>
+  <build_depend>pluginlib</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>tf2_geometry_msgs</build_depend>
+  <build_depend>tf2_ros</build_depend>
+  <build_depend>tf2_sensor_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tf2</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+
+  <exec_depend>costmap_2d</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_core</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>pluginlib</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>tf2_geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf2_sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- You can specify that this package is a metapackage here: -->
+    <!-- <metapackage/> -->
+    <nav_core plugin="${prefix}/blp_plugin.xml"/>
+    <!-- Other tools can request additional information be placed here -->
+  </export>
+</package>

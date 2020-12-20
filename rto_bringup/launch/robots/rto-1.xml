@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Core parameters -->
+    <arg name="robot" default="$(env ROBOT)" doc="Robot type [rto-1, rto-2, rto-3]"/>
+    <arg name="robot_env" default="$(env ROBOT_ENV)" doc="Robot environment [sample]"/>
+    <arg name="robot_ip" default="0.0.0.0" />
+
+    <!-- Movement parameters -->
+    <arg name="max_linear_velocity" default="0.3" />
+
+    <!-- Sensor parameters -->
+    <arg name="sensor_laser" default="true" />
+    <arg name="sensor_3dcam" default="true" />
+    <!-- <arg name="depth2scan" default="false"/>
+    <arg name="depth2scan_topic_pub" default="depth_to_scan"/> -->
+
+
+    <!-- Start-up core components to communicate with the robot and move it -->
+    <include file="$(find rto_bringup)/launch/components/base.xml">
+        <arg name="robot" value="$(arg robot)"/>
+        <arg name="robot_ip" value="$(arg robot_ip)"/>
+        <arg name="max_linear_velocity" value="$(arg max_linear_velocity)"/>
+    </include>
+
+    <!-- Start-up hokuyo sensor if desired -->
+    <group if="$(arg sensor_laser)">
+        <node pkg="tf" type="static_transform_publisher" name="static_tf_laser" args="0.065 0 0.2015 0 0 0 base_link laser 100" />
+        <node pkg="urg_node" type="urg_node" name="urg_node" />        
+    </group>
+
+    <!-- Start-up 3d-cam if desired -->
+    <group if="$(arg sensor_3dcam)">
+        <node pkg="tf" type="static_transform_publisher" name="static_tf_3dcam" args="0.065 0.03 0.293 0.04 0 0 base_link camera_link 100" />
+        <include file="$(find openni2_launch)/launch/openni2.launch" />
+
+        <!-- <group if="$(arg depth2scan)">
+            <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan" output="log" respawn="false" respawn_delay="0">
+                <param name="scan_time" value="0.1"/>
+                <param name="range_min" value="0.02"/>
+                <param name="range_max" value="5.6"/>
+                <remap from="image" to="/camera/depth/image_raw"/>
+                <remap from="scan" to="$(arg depth2scan_topic_pub)"/>
+            </node>            
+        </group> -->
+    </group>
+    
+</launch>

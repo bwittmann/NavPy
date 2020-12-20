@@ -1,0 +1,23 @@
+<package format="2">
+  <name>rto_navigation</name>
+  <version>0.1.0</version>
+  <description>The rto_navigation package</description>
+  <maintainer email="suraj.nair@tum-create.edu.sg">Suraj Nair</maintainer>
+  <maintainer email="aravind.v@tum-create.edu.sg">Aravind V</maintainer>
+  <license>BSD</license>
+  <url type="website">http://wiki.ros.org/rto_navigation</url>
+  <author email="verbeek@servicerobotics.eu">Christian Verbeek</author>
+  
+  <!-- The *_depend tags are used to specify dependencies -->
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <build_depend>rto_node</build_depend>
+
+  <exec_depend>rto_node</exec_depend>
+  <exec_depend>rto_safety</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>map_server</exec_depend>
+  <exec_depend>move_base</exec_depend>
+  <exec_depend>amcl</exec_depend>
+
+</package>

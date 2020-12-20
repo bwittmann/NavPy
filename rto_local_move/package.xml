@@ -1,0 +1,30 @@
+<package format="2">
+  <name>rto_local_move</name>
+  <version>0.1.0</version>
+  <description>The rto_local_move package</description>
+  <maintainer email="suraj.nair@tum-create.edu.sg">Suraj Nair</maintainer>
+  <maintainer email="aravind.v@tum-create.edu.sg">Aravind V</maintainer>
+  <license>BSD</license>
+  <url type="website">http://wiki.ros.org/rto_local_move</url>
+  <author email="verbeek@servicerobotics.eu">Christian Verbeek</author>
+  <!-- The *_depend tags are used to specify dependencies -->
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>actionlib</build_depend>
+  <build_depend>actionlib_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>nav_msgs</build_depend>
+  <build_depend>rto_node</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>rto_msgs</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>message_generation</build_depend>
+  <exec_depend>actionlib</exec_depend>
+  <exec_depend>actionlib_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>rto_node</exec_depend>
+  <exec_depend>rto_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+</package>

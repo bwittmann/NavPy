@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+
+<launch>
+    <node pkg="gmapping" type="slam_gmapping" name="rto_gmapping">
+        <param name="xmin" value="-20" />
+        <param name="xmax" value="20" />
+        <param name="ymin" value="-20" />
+        <param name="ymax" value="20" />
+    </node>
+</launch>

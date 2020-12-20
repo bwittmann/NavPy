@@ -1,0 +1,12 @@
+RTOLocalPlanner:
+  max_linear_vel: 0.2
+  mix_linear_vel: 0.1
+  max_rotation_vel: 1.0
+  min_rotation_vel: 0.3
+
+  yaw_goal_tolerance: 0.05
+  xy_goal_tolerance: 0.10
+  
+  heading_lookahead: 0.3
+  num_window_points: 10
+  
