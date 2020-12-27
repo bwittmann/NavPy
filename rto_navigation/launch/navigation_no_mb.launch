@@ -5,6 +5,10 @@
     <arg name="map_file" value="$(find rto_navigation)/maps/$(arg robot_env).yaml" />
 
 
+    <!-- Run custom mapserver (in construction)
+    <node name="map_server_node" pkg="rto_map_server" type="rto_map_server" args="$(arg map_file)"/>
+    -->
+
     <!-- Run mapserver -->
     <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
 
