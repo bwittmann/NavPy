@@ -3,15 +3,20 @@
 import rospy
 import numpy as np
 import cv2 as cv
-import sys
-
-from threading import Lock
+import os
 
 from rto_map_server.srv import GetMap, GetMapResponse
 from nav_msgs.msg import OccupancyGrid
 
 
-#TODO add possibility for multiple maps stored in map server
+np.set_printoptions(precision=1)
+np.set_printoptions(suppress=True)
+np.set_printoptions(linewidth=130)
+
+
+# TODO: add possibility for multiple maps stored in map server
+# TODO: possibly implement a mapsaver using cv.imwrite()
+
 
 class MapServer():
     """
@@ -22,21 +27,40 @@ class MapServer():
     """
 
     def __init__(self):
-        '''
-        self.args = rospy.myargv(argv=sys.argv)
-        if len(self.args) != 2:
-            rospy.logerr('Number of passed arguments does not match.')
-        sys.exit(1)
-        '''
 
-        #TODO: use second element (path to yaml) in args list (first one is just python path)
-        # and check how to read yaml files based on a path
+        # Version of passing yaml file as a arg instead of as a parameter.
+        # args = rospy.myargv(argv=sys.argv)
+        # One argument results in a list that has length 2. 
+        # First arg: path to node, second arg: actual passed argument
+        # if len(args) != 2:
+        #    rospy.logerr('Number of passed arguments does not match (1 required).')
+        #   sys.exit(1)
+        # yaml_path = args[1]
+        
+        # Get parameters from parameter server
+        self.maps_nr = rospy.get_param('~maps_nr')
+
+        self.map_params = {}
+        for map_nr in range(1, self.maps_nr + 1):
+            self.map_params['map' + str(map_nr)] = rospy.get_param('~map' + str(map_nr))
+
+            # Create path to pgm.file of map and store it in the dict
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            img_path = os.path.join(dir_path[:-4], 'maps', self.map_params['map' + str(map_nr)]['image'])
+            self.map_params['map' + str(map_nr)]['image_path'] = img_path
+
+        # Transform the .pgm files of the maps to a numpy.ndarray data type
+        self._trans_pgm_to_np()
 
 
 
     def _trans_pgm_to_np(self):
-        return 
+        self.maps_raw = {}
+        for map_nr in range(1, self.maps_nr + 1):
+            self.maps_raw['map' + str(map_nr)] = cv.imread(self.map_params['map' + str(map_nr)]['image_path'], cv.IMREAD_GRAYSCALE)
 
+
+        
     @staticmethod
     def _handle_get_map(request):
         #return(GetMapResponse(self.map))
@@ -45,6 +69,7 @@ class MapServer():
     def start_server(self):
         get_map = rospy.Service('get_map', GetMap, self._handle_get_map)
         rospy.spin()
+
 
 
 
