@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import cv2 as cv
+import sys
+
+from threading import Lock
+
+from rto_map_server.srv import GetMap, GetMapResponse
+from nav_msgs.msg import OccupancyGrid
+
+
+#TODO add possibility for multiple maps stored in map server
+
+class MapServer():
+    """
+    Class used for creation of a node that acts as a map server.
+    The map server should transform a .pgm file in the maps folder and
+    add meta information which is stored in the corresponding .yaml 
+    file. The MapServer class implements a service called GetMap.
+    """
+
+    def __init__(self):
+        '''
+        self.args = rospy.myargv(argv=sys.argv)
+        if len(self.args) != 2:
+            rospy.logerr('Number of passed arguments does not match.')
+        sys.exit(1)
+        '''
+
+        #TODO: use second element (path to yaml) in args list (first one is just python path)
+        # and check how to read yaml files based on a path
+
+
+
+    def _trans_pgm_to_np(self):
+        return 
+
+    @staticmethod
+    def _handle_get_map(request):
+        #return(GetMapResponse(self.map))
+        pass
+
+    def start_server(self):
+        get_map = rospy.Service('get_map', GetMap, self._handle_get_map)
+        rospy.spin()
+
+
+
+if __name__ == '__main__':
+
+    rospy.init_node('map_server')
+
+    map_server = MapServer()
+    map_server.start_server()
