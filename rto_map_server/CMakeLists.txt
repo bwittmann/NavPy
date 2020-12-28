@@ -9,7 +9,7 @@ project(rto_map_server)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   nav_msgs
-  rospy,
+  rospy
 )
 
 ## System dependencies are found with CMake's conventions
