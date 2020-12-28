@@ -7,9 +7,11 @@ import sys
 
 from threading import Lock
 
-from rto_map_server.srv import GetMap   #TODO: make it work
+from rto_map_server.srv import GetMap, GetMapResponse
 from nav_msgs.msg import OccupancyGrid
 
+
+#TODO add possibility for multiple maps stored in map server
 
 class MapServer():
     """
@@ -20,14 +22,15 @@ class MapServer():
     """
 
     def __init__(self):
+        '''
         self.args = rospy.myargv(argv=sys.argv)
         if len(self.args) != 2:
             rospy.logerr('Number of passed arguments does not match.')
         sys.exit(1)
+        '''
 
         #TODO: use second element (path to yaml) in args list (first one is just python path)
         # and check how to read yaml files based on a path
-
 
 
 
@@ -39,11 +42,9 @@ class MapServer():
         #return(GetMapResponse(self.map))
         pass
 
-
     def start_server(self):
-        s = rospy.Service('GetMap', GetMap, self._handle_get_map)
+        get_map = rospy.Service('get_map', GetMap, self._handle_get_map)
         rospy.spin()
-
 
 
 
@@ -53,8 +54,3 @@ if __name__ == '__main__':
 
     map_server = MapServer()
     map_server.start_server()
-
-
-    '''
-    print(cv.__version__)
-    '''
