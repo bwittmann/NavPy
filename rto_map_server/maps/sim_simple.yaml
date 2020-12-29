@@ -1,18 +1,9 @@
-# States the number of maps provided by the map_server
-maps_nr: 1
-
-# Dict consisting of parameters of the first map
-map1: {
-  image: sim_simple.pgm,
-  resolution: 0.050000,
-  origin: [-3.246519, -3.028618, 0.000000],
-  negate: 0,
-  occupied_thresh: 0.65,
-  free_thresh: 0.196
-}
-
-# To add more maps, append the .yaml file in the same style as map1.
-# The second map should be called map2, the third map3, etc.
+image: sim_simple.pgm,
+resolution: 0.050000,
+origin: [-3.246519, -3.028618, 0.000000],
+negate: 0,
+occupied_thresh: 0.65,
+free_thresh: 0.196
 
 
 
