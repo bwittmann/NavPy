@@ -7,14 +7,14 @@
 
     <!-- Run custom mapserver (in construction) -->
     <node name="map_server" pkg="rto_map_server" type="map_server_node" output='screen'>
-        <rosparam file="$(find rto_map_server)/maps/$(arg robot_env).yaml"/>
+        <rosparam file="$(find rto_map_server)/config/map_server_params.yaml"/>
     </node>
     
-
 
     <!-- Run mapserver 
     <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
     -->
+
 
     <!-- Run AMCL 
     <include file="$(find amcl)/examples/amcl_omni.launch" />
