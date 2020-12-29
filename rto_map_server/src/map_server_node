@@ -4,6 +4,7 @@ import rospy
 import numpy as np
 import cv2
 import os
+import sys
 
 from rto_map_server.srv import GetMap, GetMapResponse
 from nav_msgs.msg import OccupancyGrid
@@ -13,6 +14,7 @@ from nav_msgs.msg import OccupancyGrid
 # TODO: possibly implement a mapsaver using cv2.imwrite()
 # TODO: clean up code
 # TODO: rospy.Time.now() always returns 0
+# TODO: maybe work with the thresholds provided by the yaml file and think about the use of a latched topic
 
 
 class MapServer():
@@ -71,7 +73,11 @@ class MapServer():
         #rospy.loginfo(self.map_info)
         #cv2.imwrite('test.jpg', self.map_info['map1']['map_raw'])
 
+        # Perpare messages for the service
         self._get_occupancy_grid()
+
+        if len(self.occupancy_grids) == 0:
+            rospy.logwarn('The map server currently stores 0 maps')
 
         # Clear dict to save space
         self.map_info.clear()
@@ -113,7 +119,10 @@ class MapServer():
 
         @return: A OccupancyGrid message corresponding to the map number of the request.
         """
-        rospy.loginfo("Service 'get_map' requested (Request: '{}')".format(req))
+        if 'map' + str(req.map_nr) not in self.occupancy_grids:
+            rospy.logerr("Request to 'get_map' failed. Request does not match to any stored maps.")
+        else:
+            rospy.loginfo("Service 'get_map' requested (Request: '{}').".format(req))
 
         # Add time stamp to response message
         self.occupancy_grids['map' + str(req.map_nr)].header.stamp = rospy.Time.now()
