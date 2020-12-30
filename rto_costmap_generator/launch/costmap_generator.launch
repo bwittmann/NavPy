@@ -1,0 +1,7 @@
+<launch>
+
+    <node name="costmap_generator" pkg="rto_costmap_generator" type="costmap_generator_node" output='screen'>
+        <rosparam file="$(find rto_costmap_generator)/config/costmap_generator_params.yaml"/>
+    </node>
+
+</launch>

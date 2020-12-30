@@ -111,7 +111,7 @@ class ParticleFilter(object):
 
     # resample a new set oof particles from the old particles by considering their weights calculated earlier
     def resample(self):
-        pass
+        pass    
 
     # calculates the laserscans the robot would deliver in the pose (x,y,yaw) of the particle
     def get_laser_scan_for_particle(self, x, y, yaw, angles, min_range, max_range):
