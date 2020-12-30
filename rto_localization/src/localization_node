@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import rospy
 import tf
-import tf.transformations as tr
+import tf.transformations as transform
 from std_msgs.msg import String, Header, ColorRGBA
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
-from geometry_msgs.msg import Twist, PoseStamped, Point
+from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
 from math import sqrt, cos, sin, pi, atan2
+
 from threading import Thread, Lock
 from math import pi, log, exp
 import random
@@ -18,16 +19,16 @@ import pickle
 from rto_map_server.srv import GetMap
 
 class Particle(object):
-    def __init__(self, id, x,y, theta):
+    def __init__(self, id, x,y, yaw):
         self.x = x
         self.y = y
         self.id = id
-        self.theta = theta
+        self.yaw = yaw
 
 class ParticleFilter(object):
     
     # initialize object of ParticleFilter and set all the parameters
-    def __init__(self, num_particles, occ_grid_map, xmin, xmax, ymin, ymax,
+    def __init__(self, num_particles, occ_grid_map,
                  laser_min_range, laser_max_range, laser_min_angle, laser_max_angle,
                  dynamics_translation_noise_std_dev,
                  dynamics_orientation_noise_std_dev,
@@ -35,19 +36,31 @@ class ParticleFilter(object):
 
 
         self.num_particles = num_particles
-        self.ogm = occ_grid_map
 
+        # call a cell in self.ogm by self.ogm[x,y]
+        self.ogm = occ_grid_map
+        self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.width, occ_grid_map.map.info.height))
+        
         # Workspace boundaries
-        self.xmax = xmax
-        self.xmin = xmin
-        self.ymin = ymin
-        self.ymax = ymax
+        """
+        TODO: check if x = width and y = height
+
+        """
+        self.xmin = 0
+        self.xmax = occ_grid_map.map.info.width
+        self.ymin = 0
+        self.ymax = occ_grid_map.map.info.height
+        
 
         # laser setup
         self.laser_max_angle = laser_max_angle
         self.laser_min_angle = laser_min_angle
         self.laser_max_range = laser_max_range
         self.laser_min_range = laser_min_range
+
+        #tf Transform
+        self.t = tf.Transformer(True, rospy.Duration(10.0))
+        self.listener = tf.TransformListener()
 
         # Std deviation of noise affecting translation in the dynamics model for particles
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
@@ -65,13 +78,31 @@ class ParticleFilter(object):
         self.particles = []
         self.weights = []
     
+    #function which transforms a real x,y cooridinate into the location of a cell in the ogm
+    def _coordinates_to_grid_transform(self ,x , y):
+        grid_x = int(x-self.ogm.map.info.origin.position.x/self.ogm.map.info.resolution)
+        grid_y = int(y-self.ogm.map.info.origin.position.y/self.ogm.map.info.resolution)
+        grid_x_in_xrange = min(max(0, grid_x), self.xmax)
+        grid_y_in_yrange = min(max(0, grid_y), self.ymax)
+        return grid_x_in_xrange, grid_y_in_yrange
+        
+
     # function which randomly samples x,y positions in the free space of the map
     def _get_random_free_space(self):
-        pass
+        while True:
+            x_random = np.random.uniform(self.xmin, self.xmax)
+            y_random = np.random.uniform(self.ymin, self.ymax)
+            x, y = self._coordinates_to_grid_transform(x_random, y_random)
+            if x != 100 and y != 100:
+                break
+        yaw = np.random.uniform(0,2*pi)
+        return x, y, yaw
 
     # function which initilizes num_particles of particles
     def init_particles(self):
-        pass
+        for i in range(self.num_particles):
+            x, y, yaw = self._get_random_free_space()
+            Particle(i, x, y, yaw)
 
     # function which updates the particle it includes prediction, update
     # from there it calculates a weight for each particle which is used for resampling 
@@ -99,18 +130,40 @@ class ParticleFilter(object):
 
     # function calculates the relative motion between the last and current odometry measurement
     # function therefore uses the difference of previous and current x,y position and yaw angle 
-    def handle_odometry(self, robot_odom):
-        pass
+    def predict_particle_odometry(self, odom, last_odom):
 
-    # function uses the relative motion caclulated in self.handle_odometry to recalculate the current the position of the robot according to its odoemtry measurement
-    # function incorperates an uncertainty for x, y, yaw
-    def predict_particle_odometry(self, particle):
-        pass
+        
+        position = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
+        last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
+        orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
+        last_orientation = np.array([last_odom.pose.pose.orientation.x, last_odom.pose.pose.orientation.y, last_odom.pose.pose.orientation.z, last_odom.pose.pose.orientation.w])
+        
+        # multiplying current orientation with inverse previous orientation returns orientation difference in quternion form of orientation
+        diff_orientation_quaternion = transform.quaternion_multiply(transform.quaternion_inverse(last_orientation), orientation)
+
+        # transform quatermion form of ortientation to euler form of orientation (roll, pitch, yaw)
+        _, _, yaw_diff = transform.euler_from_quaternion(diff_orientation_quaternion)
+
+        # diff in position can be easly calculated by subtracting x,y,z coordinates
+        diff_position = position-last_position
+
+        self.dx = diff_position[0]
+        self.dy = diff_position[1]
+        self.dyaw = yaw_diff
+        
+        uncertainty_translation = np.random.normal(0, self.dynamics_translation_noise_std_dev)
+        uncertainty_orientation = np.random.normal(0, self.dynamics_orientation_noise_std_dev)
+
+        """
+        particle.x = self.dx + uncertainty_translation
+        particle.y = self.dy + uncertainty_translation
+        particle.yaw = self.dyaw + uncertainty_orientation
+        """
 
 class MonteCarloLocalization(object):
 
     #initializes object of MonteCarloLocalization and sets all parameters
-    def __init__(self, num_particles, xmin, xmax, ymin, ymax):
+    def __init__(self, num_particles):
 
         #initialize ros node
         rospy.init_node('monte_carlo_localization')
@@ -120,26 +173,30 @@ class MonteCarloLocalization(object):
         try:
             get_map = rospy.ServiceProxy('get_map', GetMap)
             self.ogm = get_map(1)
-            rospy.loginfo(self.ogm)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
     
         # set variables
         self.last_laser_scan = None
+        self.odometry = None
+        self.last_odometry = None
 
         #read in parameters from launch ParticleFilter
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
         dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
         beam_range_measurement_noise_std_dev = rospy.get_param("~beam_range_measurement_noise_std_dev")
 
-        #create object from ParticleFilter
-        self.pf = ParticleFilter(num_particles, self.ogm, xmin, xmax, ymin, ymax, 0, 0, 0, 0,
+        # ParticleFilter
+        self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0,
                                  dynamics_translation_noise_std_dev,
                                  dynamics_orientation_noise_std_dev,
                                  beam_range_measurement_noise_std_dev)
 
-        # initialize particles in particle ParticleFilter
         self.pf.init_particles()
+
+        #tf Transform
+        self.t = tf.Transformer(True, rospy.Duration(10.0))
+        self.listener = tf.TransformListener()
 
         # Subscribers (LaserScan, Odometry)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1)
@@ -154,11 +211,34 @@ class MonteCarloLocalization(object):
         self.pf.laser_min_range = msg.range_min
         self.pf.laser_max_range = msg.range_max
 
+        if self.last_laser_scan:
+            #header.stamp creates a timestamp where it concatinates secs and nsecs. dt is a nsecs value
+            dt = msg.header.stamp - self.last_laser_scan.header.stamp
+            self.pf.handle_observation(msg,dt)
+
+
         self.last_laser_scan = msg
 
     def odometry_callback(self, msg):
-        self.pf.handle_odometry(msg)
-        
+        """
+        #transform from frame /odom to frame /base_link
+        now = rospy.Time.now()
+        self.listener.waitForTransform('/odom', '/base_link', now, rospy.Duration(4.0)) 
+        pose_msg = PoseStamped()
+        pose_msg.header.frame_id = msg.header.frame_id
+        pose_msg.header.stamp = msg.header.stamp
+        pose_msg.pose = msg.pose.pose
+        self.odometry = self.listener.transformPose('/base_link', pose_msg)
+  
+        #call predict_particle_odometry
+        if self.last_odometry:
+            self.pf.predict_particle_odometry(self.odometry, self.last_odometry)
+        self.last_odometry = self.odometry
+        """
+        self.odometry = msg
+        if self.last_odometry:
+            self.pf.predict_particle_odometry(self.odometry, self.last_odometry)
+        self.last_odometry = self.odometry
 
     def run(self):
         rate = rospy.Rate(20)
@@ -170,13 +250,7 @@ class MonteCarloLocalization(object):
 if __name__ == '__main__':
     num_particles = 50
 
-    # Workspace boundaries in meters
-    xmin = -20
-    xmax = 20
-    ymin = -20
-    ymax = 20
-
-    mcl = MonteCarloLocalization(num_particles, xmin, xmax, ymin, ymax)
+    mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
 
