@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+import rospy
+import tf
+import tf.transformations as tr
+from std_msgs.msg import String, Header, ColorRGBA
+from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
+from geometry_msgs.msg import Twist, PoseStamped, Point
+from sensor_msgs.msg import LaserScan
+from visualization_msgs.msg import Marker, MarkerArray
+from math import sqrt, cos, sin, pi, atan2
+from threading import Thread, Lock
+from math import pi, log, exp
+import random
+import numpy as np
+import sys
+import pickle
+
+from rto_map_server.srv import GetMap
+
+class Particle(object):
+    def __init__(self, id, x,y, theta):
+        self.x = x
+        self.y = y
+        self.id = id
+        self.theta = theta
+
+class ParticleFilter(object):
+    
+    # initialize object of ParticleFilter and set all the parameters
+    def __init__(self, num_particles, occ_grid_map, xmin, xmax, ymin, ymax,
+                 laser_min_range, laser_max_range, laser_min_angle, laser_max_angle,
+                 dynamics_translation_noise_std_dev,
+                 dynamics_orientation_noise_std_dev,
+                 beam_range_measurement_noise_std_dev):
+
+
+        self.num_particles = num_particles
+        self.ogm = occ_grid_map
+
+        # Workspace boundaries
+        self.xmax = xmax
+        self.xmin = xmin
+        self.ymin = ymin
+        self.ymax = ymax
+
+        # laser setup
+        self.laser_max_angle = laser_max_angle
+        self.laser_min_angle = laser_min_angle
+        self.laser_max_range = laser_max_range
+        self.laser_min_range = laser_min_range
+
+        # Std deviation of noise affecting translation in the dynamics model for particles
+        self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
+
+        # Std deviation of noise affecting orientation in the dynamics model for particles
+        self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
+
+        # Std deviation of noise affecting measured range from the laser measurement model
+        self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
+
+        # Number of laser beams used during the measurement update
+        self.eval_beams = 32
+
+        # list of particles and corresponding weights of length num_particles
+        self.particles = []
+        self.weights = []
+    
+    # function which randomly samples x,y positions in the free space of the map
+    def _get_random_free_space(self):
+        pass
+
+    # function which initilizes num_particles of particles
+    def init_particles(self):
+        pass
+
+    # function which updates the particle it includes prediction, update
+    # from there it calculates a weight for each particle which is used for resampling 
+    def handle_observation(self, laser_scan, dt):
+        pass
+
+    # resample a new set oof particles from the old particles by considering their weights calculated earlier
+    def resample(self):
+        pass
+
+    # calculates the laserscans the robot would deliver in the pose (x,y,yaw) of the particle
+    def get_laser_scan_for_particle(self, x, y, yaw, angles, min_range, max_range):
+        pass
+
+    # function which subsamples from the whole laser_input the laserscans which are needed for the measurement update
+    # just self.eval_beams are needed and scans should be between between self.laser_min_range and self.laser_max_range
+    def subsample_laser_scan(self, laser_scan_msg):
+        pass
+
+    # function calls self.subsample_laser_scan to get the laserscans from robot
+    # function calls self.calls get_laser_scan_for_particles to calculate the laserscans for the particle in the argument
+    # function then calculates the error between the scans
+    def get_prediction_error(self, laser_scan_msg, particle):
+        pass
+
+    # function calculates the relative motion between the last and current odometry measurement
+    # function therefore uses the difference of previous and current x,y position and yaw angle 
+    def handle_odometry(self, robot_odom):
+        pass
+
+    # function uses the relative motion caclulated in self.handle_odometry to recalculate the current the position of the robot according to its odoemtry measurement
+    # function incorperates an uncertainty for x, y, yaw
+    def predict_particle_odometry(self, particle):
+        pass
+
+class MonteCarloLocalization(object):
+
+    #initializes object of MonteCarloLocalization and sets all parameters
+    def __init__(self, num_particles, xmin, xmax, ymin, ymax):
+
+        #initialize ros node
+        rospy.init_node('monte_carlo_localization')
+
+        #load map from map_loader_node
+        rospy.wait_for_service('get_map')
+        try:
+            get_map = rospy.ServiceProxy('get_map', GetMap)
+            self.ogm = get_map(1)
+            rospy.loginfo(self.ogm)
+        except rospy.ServiceException as e:
+            print("Service call failed: %s"%e)
+    
+        # set variables
+        self.last_laser_scan = None
+
+        #read in parameters from launch ParticleFilter
+        dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
+        dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
+        beam_range_measurement_noise_std_dev = rospy.get_param("~beam_range_measurement_noise_std_dev")
+
+        #create object from ParticleFilter
+        self.pf = ParticleFilter(num_particles, self.ogm, xmin, xmax, ymin, ymax, 0, 0, 0, 0,
+                                 dynamics_translation_noise_std_dev,
+                                 dynamics_orientation_noise_std_dev,
+                                 beam_range_measurement_noise_std_dev)
+
+        # initialize particles in particle ParticleFilter
+        self.pf.init_particles()
+
+        # Subscribers (LaserScan, Odometry)
+        self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1)
+        self.odom_sub = rospy.Subscriber('/odom', Odometry,  self.odometry_callback, queue_size=1)
+
+        # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
+
+
+    def laser_scan_callback(self, msg):
+        self.pf.laser_min_angle = msg.angle_min
+        self.pf.laser_max_angle = msg.angle_max
+        self.pf.laser_min_range = msg.range_min
+        self.pf.laser_max_range = msg.range_max
+
+        self.last_laser_scan = msg
+
+    def odometry_callback(self, msg):
+        self.pf.handle_odometry(msg)
+        
+
+    def run(self):
+        rate = rospy.Rate(20)
+        while not rospy.is_shutdown():
+            rate.sleep()
+    
+
+
+if __name__ == '__main__':
+    num_particles = 50
+
+    # Workspace boundaries in meters
+    xmin = -20
+    xmax = 20
+    ymin = -20
+    ymax = 20
+
+    mcl = MonteCarloLocalization(num_particles, xmin, xmax, ymin, ymax)
+    mcl.run()
+
+

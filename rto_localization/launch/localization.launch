@@ -1,0 +1,28 @@
+
+<launch>
+
+
+    <arg name="robot_env" default="$(optenv ROBOT_ENV sim_simple)"/>
+    <arg name="safety" default="true"/>
+    <arg name="map_file" value="$(find rto_map_server)/maps/$(arg robot_env).yaml" />
+
+
+    <!-- Run custom mapserver (in construction) -->
+    <node name="map_server" pkg="rto_map_server" type="map_server_node" output='screen'>
+        <rosparam file="$(find rto_map_server)/config/map_server_params.yaml"/>
+    </node>
+    
+
+    <!-- Run mapserver 
+    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
+    -->
+
+   <node pkg="rto_localization" type="localization_node" output="screen" name="localization_node">
+         <param name="dynamics_translation_noise_std_dev"    value="0.45" />
+         <param name="dynamics_orientation_noise_std_dev"    value="0.03" />
+         <param name="beam_range_measurement_noise_std_dev"  value="0.3" />     
+   </node>
+
+
+   
+</launch>
