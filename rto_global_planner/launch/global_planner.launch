@@ -4,11 +4,19 @@
 
     <arg name="map_file" value="$(find rto_navigation)/maps/$(arg robot_env).yaml" />
 
+    <!-- Run our map server -->
+    <node name="map_server" pkg="rto_map_server" type="map_server_node" output='screen'>
+        <rosparam file="$(find rto_map_server)/config/map_server_params.yaml"/>
+    </node>
+
     <!-- Run mapserver -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
+    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/> -->
 
     <!-- Run AMCL -->
     <include file="$(find amcl)/examples/amcl_omni.launch" />
+
+    <!-- Run global planner -->
+    <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner.py" output="screen"/>
 
     <!-- Run move_base -->
     <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
@@ -20,7 +28,7 @@
         <!-- TODO: Probably exchange base local planner -->
         <param name="base_local_planner" value="rto_local_planner/RTOLocalPlanner" />
         <param name="controller_frequency" value="15.0" />
-        <!-- <remap from="cmd_vel" to="rto_cmd_vel" /> -->
+        <remap from="cmd_vel" to="test_cmd_vel" />
     </node>
 
     <!-- Run rto_safety_node -->
