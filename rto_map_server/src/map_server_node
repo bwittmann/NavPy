@@ -4,7 +4,6 @@ import rospy
 import numpy as np
 import cv2
 import os
-import sys
 
 from rto_map_server.srv import GetMap, GetMapResponse
 from nav_msgs.msg import OccupancyGrid
