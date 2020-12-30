@@ -68,6 +68,7 @@ class MapServer():
 
             self.map_info['map' + str(map_nr)]['map_raw'] = map_raw
 
+
         # Comment out for debugging
         #rospy.loginfo(self.map_info)
         #cv2.imwrite('test.jpg', self.map_info['map1']['map_raw'])
@@ -120,20 +121,20 @@ class MapServer():
         """
         if 'map' + str(req.map_nr) not in self.occupancy_grids:
             rospy.logerr("Request to 'get_map' failed. Request does not match to any stored maps.")
+            return
         else:
             rospy.loginfo("Service 'get_map' requested (Request: '{}').".format(req))
 
-        # Add time stamp to response message
-        self.occupancy_grids['map' + str(req.map_nr)].header.stamp = rospy.Time.now()
-
-        return self.occupancy_grids['map' + str(req.map_nr)]
+            # Add time stamp to response message
+            self.occupancy_grids['map' + str(req.map_nr)].header.stamp = rospy.Time.now()
+            return self.occupancy_grids['map' + str(req.map_nr)]
 
 
     def start_server(self):
         """
         Main method of the MapServer class. Provides a service by creating a rospy.Service instance.
         """
-        get_map = rospy.Service('get_map', GetMap, self._handle_get_map)
+        rospy.Service('get_map', GetMap, self._handle_get_map)
         rospy.spin()
 
 
