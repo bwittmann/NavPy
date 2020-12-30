@@ -1,0 +1,2 @@
+# Map to start the costmap generator with
+init_map_nr: 1
