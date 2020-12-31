@@ -7,7 +7,7 @@ from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
 from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
-from math import sqrt, cos, sin, pi, atan2
+from math import sqrt, cos, sin, pi, atan2, inf
 
 from threading import Thread, Lock
 from math import pi, log, exp
@@ -29,7 +29,7 @@ class ParticleFilter(object):
     
     # initialize object of ParticleFilter and set all the parameters
     def __init__(self, num_particles, occ_grid_map,
-                 laser_min_range, laser_max_range, laser_min_angle, laser_max_angle,
+                 laser_min_range, laser_max_range, laser_min_angle, laser_max_angle, subsampled_angles, eval_beams, 
                  dynamics_translation_noise_std_dev,
                  dynamics_orientation_noise_std_dev,
                  beam_range_measurement_noise_std_dev):
@@ -57,6 +57,7 @@ class ParticleFilter(object):
         self.laser_min_angle = laser_min_angle
         self.laser_max_range = laser_max_range
         self.laser_min_range = laser_min_range
+        self.subsampled_angles = subsampled_angles
 
         #tf Transform
         self.t = tf.Transformer(True, rospy.Duration(10.0))
@@ -72,7 +73,7 @@ class ParticleFilter(object):
         self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
 
         # Number of laser beams used during the measurement update
-        self.eval_beams = 32
+        self.eval_beams = eval_beams
 
         # list of particles and corresponding weights of length num_particles
         self.particles = []
@@ -106,21 +107,63 @@ class ParticleFilter(object):
 
     # function which updates the particle it includes prediction, update
     # from there it calculates a weight for each particle which is used for resampling 
-    def handle_observation(self, laser_scan, dt):
-        pass
+    def handle_observation(self, laser_scan_msg, dt):
+
+        """
+        just random function call to check whether the functions work
+        """
+        self.subsample_laser_scan(laser_scan_msg)
+        self.get_laser_scan_for_particle(1,1,0)
+        
 
     # resample a new set oof particles from the old particles by considering their weights calculated earlier
     def resample(self):
         pass    
 
     # calculates the laserscans the robot would deliver in the pose (x,y,yaw) of the particle
-    def get_laser_scan_for_particle(self, x, y, yaw, angles, min_range, max_range):
-        pass
+    def get_laser_scan_for_particle(self, x, y, yaw):
+
+        particle_ranges = []
+        step = self.ogm.map.info.resolution
+        for i in self.subsampled_angles:
+            angle = i+yaw
+            distance = self.laser_min_range
+            check_if_obstacle_is_sensed = 0
+            while distance < self.laser_max_range:
+                x_scan = x + cos(angle)*distance
+                y_scan = y + sin(angle)*distance
+                distance += step
+                """
+                TODO:check if when x_scan and y_scan is outside of x_min, x_max, y_min, y_max what would the robot sense? inf?
+                """
+                if x_scan < self.xmin and x_scan >= self.xmax:
+                    particle_ranges.append(inf)
+                    check_if_obstacle_is_sensed = 1
+                    break
+                if y_scan < self.ymin and y_scan >= self.ymax:
+                    particle_ranges.append(inf)
+                    check_if_obstacle_is_sensed = 1
+                    break
+                x_grid, y_grid = self._coordinates_to_grid_transform(x_scan, y_scan)
+                if self.ogm_map[x_grid, y_grid] == 100:
+                    particle_ranges.append(distance)
+                    check_if_obstacle_is_sensed = 1
+                    break
+            if check_if_obstacle_is_sensed == 0:
+                particle_ranges.append(inf)
+
+        rospy.loginfo((particle_ranges))
+        return particle_ranges
 
     # function which subsamples from the whole laser_input the laserscans which are needed for the measurement update
     # just self.eval_beams are needed and scans should be between between self.laser_min_range and self.laser_max_range
     def subsample_laser_scan(self, laser_scan_msg):
-        pass
+        
+        subsample_rate = len(laser_scan_msg.ranges)/self.eval_beams
+        subsamples_ranges = []
+        for i in range(self.eval_beams):
+            subsamples_ranges.append(laser_scan_msg.ranges[int(i*subsample_rate)])
+        return subsamples_ranges
 
     # function calls self.subsample_laser_scan to get the laserscans from robot
     # function calls self.calls get_laser_scan_for_particles to calculate the laserscans for the particle in the argument
@@ -180,6 +223,7 @@ class MonteCarloLocalization(object):
         self.last_laser_scan = None
         self.odometry = None
         self.last_odometry = None
+        self.eval_beams = 32
 
         #read in parameters from launch ParticleFilter
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -187,7 +231,7 @@ class MonteCarloLocalization(object):
         beam_range_measurement_noise_std_dev = rospy.get_param("~beam_range_measurement_noise_std_dev")
 
         # ParticleFilter
-        self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0,
+        self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0, 0, self.eval_beams, 
                                  dynamics_translation_noise_std_dev,
                                  dynamics_orientation_noise_std_dev,
                                  beam_range_measurement_noise_std_dev)
@@ -211,6 +255,9 @@ class MonteCarloLocalization(object):
         self.pf.laser_min_range = msg.range_min
         self.pf.laser_max_range = msg.range_max
 
+        subsampled_angles = np.linspace(msg.angle_min, msg.angle_max, self.eval_beams)
+        self.pf.subsampled_angles = subsampled_angles
+        
         if self.last_laser_scan:
             #header.stamp creates a timestamp where it concatinates secs and nsecs. dt is a nsecs value
             dt = msg.header.stamp - self.last_laser_scan.header.stamp
@@ -249,8 +296,9 @@ class MonteCarloLocalization(object):
 
 if __name__ == '__main__':
     num_particles = 50
-
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
+
+
 
 
