@@ -1,0 +1,7 @@
+<launch>
+
+    <node name="map_server" pkg="rto_map_server" type="map_server_node" output='screen'>
+        <rosparam file="$(find rto_map_server)/config/map_server_params.yaml"/>
+    </node>
+
+</launch>

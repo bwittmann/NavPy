@@ -1,5 +1,5 @@
 # States the number of maps provided by the map_server
-maps_nr: 1
+maps_nr: 2
 
 # Dict consisting of parameters of the first map
 map1: {
@@ -14,5 +14,13 @@ map1: {
 # To add more maps, append the .yaml file in the same style as map1.
 # The second map should be called map2, the third map3, etc.
 
-
+# This map was added just for testing purposes
+map2: {
+  image: home-rd.pgm,
+  resolution: 0.050000,
+  origin: [-20.000000, -20.000000, 0.000000],
+  negate: 0,
+  occupied_thresh: 0.65,
+  free_thresh: 0.196
+}
 

@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import cv2
+
+from nav_msgs.msg import OccupancyGrid
+from rto_map_server.srv import GetMap
+from rto_costmap_generator.srv import SwitchMaps
+from sensor_msgs.msg import LaserScan 
+
+# TODO: use a latched topic
+
+class CostmapGenerator():
+
+    def __init__(self):
+
+        # Get parameters from parameter server
+        self.map_nr = rospy.get_param('~init_map_nr')
+        
+        self._call_get_map_srv()
+        self._start_switchmaps_service()
+
+        #print(self.static_map)
+
+    
+    def _call_get_map_srv(self):
+        # Get static map from map server via request to service 'get_map'
+        rospy.wait_for_service('get_map')
+        get_map = rospy.ServiceProxy('get_map', GetMap)
+        try:
+            self.static_map = get_map(self.map_nr)
+            return True
+        except rospy.ServiceException:
+            rospy.logerr("Costmap generator could not receive map from map server.")
+            return False
+
+
+    def _start_switchmaps_service(self):
+        rospy.Service('switch_maps', SwitchMaps, self._handle_switch_maps)
+        rospy.spin()
+        
+
+    def _handle_switch_maps(self, req):
+        self.map_nr = req.map_nr_switch
+        sucess = self._call_get_map_srv()
+        if sucess == True:
+            rospy.loginfo('Map gen changed map in map server to: map{}.'.format(self.map_nr))
+        return sucess
+        
+
+
+    def run(self):
+        rospy.spin()
+
+
+
+
+if __name__ == "__main__":
+
+    # Initialize a ROS node named map_server
+    rospy.init_node('costmap_generator')
+    
+    costmap_gen = CostmapGenerator()
+    costmap_gen.run()

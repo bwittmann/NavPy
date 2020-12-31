@@ -2,6 +2,7 @@
 
 import rospy
 import numpy as np
+import tf
 
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist, Point, Quaternion, Pose, PoseStamped, PoseWithCovarianceStamped
@@ -9,11 +10,13 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
+# from rto_map_server.srv import GetMap
+
 #TODO:fix bugs in the algorithm
 #TODO:fit it to different maps
 #TODO:make it can publish command to cmd_vel
 #TODO:fit to different resolutions
-#TODO:transform map
+#TODO:speed up second search
 
 class Node():
     """
@@ -33,7 +36,7 @@ class Node():
 
 class Astar_Planner():
     """
-    Independent Astar_Planner function
+    Independent Astar_Planner function class
     """
 
     def getMinNode(self):
@@ -82,11 +85,11 @@ class Astar_Planner():
 
         #TODO:update out of boundary rule
         # if the offset is out of boundary
-        if abs(node_pos[0]) > self.map_width/2 or abs(node_pos[1]) > self.map_height/2:
+        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
             return
 
         # if the offset is valid
-        elif self.map[int(node_pos[1])][int(node_pos[0])] < 40:
+        elif self.map[int(node_pos[0])][int(node_pos[1])] != 0:
             return
 
         # if the node is in closed set, then pass
@@ -110,7 +113,7 @@ class Astar_Planner():
                     currentNode.parent = minF
                     return
 
-    def astar(self, costmap, map_width, map_height, start, end):
+    def astar(self, gridmap, map_width, map_height, start, end):
         """
         main function of astar search
         """
@@ -120,7 +123,7 @@ class Astar_Planner():
         self.startnode.g = self.startnode.h = self.startnode.f = 0
         self.endnode = Node(None, end)
         self.endnode.g = self.endnode.h = self.endnode.f = 0
-        self.map = costmap
+        self.map = gridmap
         self.map_width = map_width
         self.map_height = map_height
 
@@ -162,13 +165,14 @@ class main():
     def __init__(self):
 
         # Initialize Subscribers
-        # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
+        self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
         # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
-        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_map)
+        self.sub_map = rospy.Subscriber('/map', OccupancyGrid, self.callback_map)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
         self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
+        self.pub_plan = rospy.Publisher('/visualization/plan', Marker, queue_size=10)
         # self.pub_cmd = rospy.Publisher('/cmd_vel',Twist, queue_size=10)
 
         # Initialize messages
@@ -176,13 +180,25 @@ class main():
         self.msg_path.header.stamp = rospy.Time.now()
         self.msg_path.header.frame_id = "path"
 
+        self.msg_path_marker = Marker()
+        self.msg_path_marker.header.frame_id = "map"
+        self.msg_path_marker.ns = "navigation"
+        self.msg_path_marker.id = 0
+        self.msg_path_marker.type = Marker.LINE_STRIP
+        self.msg_path_marker.action = Marker.ADD
+        self.msg_path_marker.scale.x = 0.1
+        self.msg_path_marker.color.a = 0.5
+        self.msg_path_marker.color.r = 0.0
+        self.msg_path_marker.color.g = 0.0
+        self.msg_path_marker.color.b = 1.0
+        self.msg_path_marker.pose.orientation = Quaternion(0, 0, 0, 1)
+
     def callback_pos(self, PoseWithCovarianceStamped):
         """
         callback of position
         """
-        self.pos_x = int(PoseWithCovarianceStamped.pose.pose.position.x / 0.05)
-        self.pos_y = int(PoseWithCovarianceStamped.pose.pose.position.y / 0.05)
-        print(self.pos_x, self.pos_y)
+        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x + 3.246519) / 0.05)
+        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y + 3.028618) / 0.05)
 
     def callback_map(self, OccupancyGrid):
         """
@@ -191,22 +207,22 @@ class main():
         self.map_input = np.array(OccupancyGrid.data)
         self.map_width = OccupancyGrid.info.width
         self.map_height = OccupancyGrid.info.height
-        self.map = self.map_input.reshape(self.map_width, self.map_height)
+        self.map = self.map_input.reshape(self.map_height, self.map_width) # shape of 169(width)*116(height)
         self.map = np.transpose(self.map)
 
     def callback_goal(self, PoseStamped):
         """
         callback of goal
         """
-        self.goal_x = int(PoseStamped.pose.position.x / 0.05)
-        self.goal_y = int(PoseStamped.pose.position.y / 0.05)
-        print(self.goal_x, self.goal_y)
+        # shift position to position in map
+        self.goal_x = int((PoseStamped.pose.position.x + 3.246519) / 0.05)
+        self.goal_y = int((PoseStamped.pose.position.y + 3.028618) / 0.05)
 
     def check_valid(self, goalx, goaly):
         """
         check the validility of goal
         """
-        if self.map[int(goaly)][int(goalx)] > 40:
+        if self.map[int(goalx)][int(goaly)] == 0:
             return True
         else:
             return None
@@ -216,9 +232,11 @@ class main():
 
         while not rospy.is_shutdown():
 
+            # wait for goal input to start global planner
             rospy.wait_for_message('/move_base_simple/goal', PoseStamped)
             global_planner = Astar_Planner()
 
+            # initialize start node
             start = (self.pos_x, self.pos_y)
 
             if self.check_valid(self.goal_x, self.goal_y):
@@ -229,13 +247,18 @@ class main():
                 # publish path
                 for pa in path:
                     pose = PoseStamped()
-                    pose.pose.position.x = pa[1]
-                    pose.pose.position.y = pa[0]
+                    pose.pose.position.x = pa[0]
+                    pose.pose.position.y = pa[1]
                     self.msg_path.poses.append(pose)
                 self.pub_path.publish(self.msg_path)
-                print(self.msg_path)
                 self.msg_path.poses.clear()
                 rospy.loginfo('Path is published')
+
+                # publish plan
+                for p in path:
+                    self.msg_path_marker.points.append(Point(p[0]*0.05 - 3.246519, p[1]*0.05 - 3.028618, 0))
+                self.pub_plan.publish(self.msg_path_marker)
+                self.msg_path_marker.points.clear()
 
             else:
                 rospy.loginfo('Goal is not valid')
