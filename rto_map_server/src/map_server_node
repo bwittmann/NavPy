@@ -107,7 +107,7 @@ class MapServer():
             occupancy_grid.info.origin.orientation.w = 1
 
             # We have to flip the array to adjust the origin
-            occupancy_grid.data = np.flip(self.map_info[key]['map_raw'], axis=0).ravel().tolist()
+            occupancy_grid.data = np.flip(self.map_info[key]['map_raw'], axis=0).ravel()
 
             self.occupancy_grids[key] = occupancy_grid
 
