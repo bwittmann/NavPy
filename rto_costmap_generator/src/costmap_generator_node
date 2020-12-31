@@ -2,14 +2,27 @@
 
 import rospy
 import numpy as np
-import cv2
+import cv2  # For possibility to return a picture of the costmap
+import os
 
+from threading import Thread
 from nav_msgs.msg import OccupancyGrid
 from rto_map_server.srv import GetMap
 from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
+
 # TODO: use a latched topic
+# TODO: think about use of threads
+# TODO: do we need a mutex for a service call?
+
+
+# Create wrapper for easy threading by using a decorator
+def threaded(fn):
+    def wrapper(*args):
+        Thread(target=fn, args=args).start()
+    return wrapper
+
 
 class CostmapGenerator():
 
@@ -17,25 +30,32 @@ class CostmapGenerator():
 
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
-        
+        self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
+             rospy.get_param('~global_costmap')['safety_distance']
+        self.cost_decay = rospy.get_param('~global_costmap')['cost_decay']
+
+        # Init publisher 
+        self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
+
+        # Get static map from map server via request to service 'get_map'
         self._call_get_map_srv()
+
         self._start_switchmaps_service()
 
-        #print(self.static_map)
+        self._padd_static_map()
 
-    
+
     def _call_get_map_srv(self):
-        # Get static map from map server via request to service 'get_map'
         rospy.wait_for_service('get_map')
         get_map = rospy.ServiceProxy('get_map', GetMap)
         try:
-            self.static_map = get_map(self.map_nr)
+            self.static_map = get_map(self.map_nr).map
             return True
         except rospy.ServiceException:
             rospy.logerr("Costmap generator could not receive map from map server.")
             return False
 
-
+    @threaded
     def _start_switchmaps_service(self):
         rospy.Service('switch_maps', SwitchMaps, self._handle_switch_maps)
         rospy.spin()
@@ -47,12 +67,20 @@ class CostmapGenerator():
         if sucess == True:
             rospy.loginfo('Map gen changed map in map server to: map{}.'.format(self.map_nr))
         return sucess
+
+
+    # TODO: finish this method
+    def _padd_static_map(self):
+        global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
+        #cv2.imwrite('test.jpg', global_costmap) print as uint8
         
 
-
     def run(self):
-        rospy.spin()
-
+        #rospy.spin()
+        while not rospy.is_shutdown():
+            print('running')
+            rospy.sleep(1)
+        pass
 
 
 
@@ -60,6 +88,5 @@ if __name__ == "__main__":
 
     # Initialize a ROS node named map_server
     rospy.init_node('costmap_generator')
-    
+
     costmap_gen = CostmapGenerator()
-    costmap_gen.run()
