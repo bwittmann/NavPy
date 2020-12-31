@@ -6,6 +6,7 @@ init_map_nr: 1
 global_costmap: {
   robot_diameter: 0.45,
   safety_distance: 0.2,
-  cost_decay: [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]
-  #decay_type: quadratic, logarithmic, etc
+  padded_val: 100,
+  decay_distance: 0.3,
+  decay_type: exponential # Linear, exponential, reciprocal
 }
