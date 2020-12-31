@@ -1,12 +1,15 @@
 # Map to start the costmap generator with.
 init_map_nr: 1
 
+# To log execution times of time critical methods
+log_times: True
+
 # Params necessary for padding of obstacles to obatain a point representation 
 # of the robot for the task of path planning.
 global_costmap: {
   robot_diameter: 0.45,
   safety_distance: 0.2,
   padded_val: 100,
-  decay_distance: 0.3,
+  decay_distance: 0.2,
   decay_type: exponential # Linear, exponential, reciprocal
 }
