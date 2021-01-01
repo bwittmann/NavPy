@@ -7,14 +7,11 @@ from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
 from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
-from math import sqrt, cos, sin, pi, atan2, inf
-
+from math import sqrt, cos, sin, pi, atan2, inf, log, exp
 from threading import Thread, Lock
-from math import pi, log, exp
 import random
 import numpy as np
-import sys
-import pickle
+
 
 from rto_map_server.srv import GetMap
 
@@ -82,7 +79,7 @@ class ParticleFilter(object):
 
         # list of particles and corresponding weights of length num_particles
         self.particles = []
-        self.weights = []
+        self.weights = [1]*self.num_particles
     
     #function which transforms a real x,y cooridinate into the location of a cell in the ogm
     def _coordinates_to_grid_transform(self ,x , y):
@@ -99,7 +96,7 @@ class ParticleFilter(object):
             x_random = np.random.uniform(self.xmin, self.xmax)
             y_random = np.random.uniform(self.ymin, self.ymax)
             x, y = self._coordinates_to_grid_transform(x_random, y_random)
-            if x != 100 and y != 100:
+            if self.ogm_map[x,y] != 100:
                 break
         yaw = np.random.uniform(0,2*pi)
         return x, y, yaw
@@ -127,12 +124,29 @@ class ParticleFilter(object):
         self.weights = [i/sum(weights_not_normalized) for i in weights_not_normalized]
         self.resample()
 
-    # resample a new set oof particles from the old particles by considering their weights calculated earlier
+    # resample a new set of particles from the old particles by considering their weights (systematic resampling)
     def resample(self):
-        """
-        TODO: just sample valid particles which are in min, max range and not within an obstacles
-        """
-        pass    
+        new_particles = []
+        index = random.randint(0,self.num_particles-1)
+        max_weight = max(self.weights)
+        beta = 0
+        for i in range(self.num_particles):
+            beta += random.uniform(0, 2*max_weight)
+            while self.weights[index] < beta:
+                beta -= self.weights[index]
+                if (index+1) <= (self.num_particles-1):
+                    index += 1
+                else:
+                    index = 0
+      
+            particle = self.particles[index]
+            new_particle = Particle(particle.id, particle.x, particle.y, particle.yaw)
+            new_particles.append(new_particle)
+        
+        self.particles = new_particles
+
+
+
 
     # calculates the laserscans the robot would deliver in the pose (x,y,yaw) of the particle
     def get_laser_scan_for_particle(self, x, y, yaw):
