@@ -47,10 +47,9 @@ class ParticleFilter(object):
 
         """
         self.xmin = 0
-        self.xmax = occ_grid_map.map.info.width
+        self.xmax = occ_grid_map.map.info.height-1
         self.ymin = 0
-        self.ymax = occ_grid_map.map.info.height
-        
+        self.ymax = occ_grid_map.map.info.width-1
 
         # laser setup
         self.laser_max_angle = laser_max_angle
@@ -103,7 +102,8 @@ class ParticleFilter(object):
     def init_particles(self):
         for i in range(self.num_particles):
             x, y, yaw = self._get_random_free_space()
-            Particle(i, x, y, yaw)
+            particle = Particle(i, x, y, yaw)
+            self.particles.append(particle)
 
     # function which updates the particle it includes prediction, update
     # from there it calculates a weight for each particle which is used for resampling 
@@ -112,8 +112,7 @@ class ParticleFilter(object):
         """
         just random function call to check whether the functions work
         """
-        self.subsample_laser_scan(laser_scan_msg)
-        self.get_laser_scan_for_particle(1,1,0)
+        self.get_prediction_error(laser_scan_msg)
         
 
     # resample a new set oof particles from the old particles by considering their weights calculated earlier
@@ -132,27 +131,25 @@ class ParticleFilter(object):
             while distance < self.laser_max_range:
                 x_scan = x + cos(angle)*distance
                 y_scan = y + sin(angle)*distance
-                distance += step
+                x_grid, y_grid = self._coordinates_to_grid_transform(x_scan, y_scan)
+                
                 """
                 TODO:check if when x_scan and y_scan is outside of x_min, x_max, y_min, y_max what would the robot sense? inf?
                 """
-                if x_scan < self.xmin and x_scan >= self.xmax:
-                    particle_ranges.append(inf)
+                if (x_grid < self.xmin and x_grid >= self.xmax) or (y_grid < self.ymin and y_grid >= self.ymax):
+                    particle_ranges.append(self.laser_max_range)
                     check_if_obstacle_is_sensed = 1
                     break
-                if y_scan < self.ymin and y_scan >= self.ymax:
-                    particle_ranges.append(inf)
-                    check_if_obstacle_is_sensed = 1
-                    break
-                x_grid, y_grid = self._coordinates_to_grid_transform(x_scan, y_scan)
-                if self.ogm_map[x_grid, y_grid] == 100:
+                elif self.ogm_map[x_grid, y_grid] == 100:
                     particle_ranges.append(distance)
                     check_if_obstacle_is_sensed = 1
                     break
-            if check_if_obstacle_is_sensed == 0:
-                particle_ranges.append(inf)
 
-        rospy.loginfo((particle_ranges))
+                distance += step
+
+            if check_if_obstacle_is_sensed == 0:
+                particle_ranges.append(self.laser_max_range)
+            
         return particle_ranges
 
     # function which subsamples from the whole laser_input the laserscans which are needed for the measurement update
@@ -160,22 +157,34 @@ class ParticleFilter(object):
     def subsample_laser_scan(self, laser_scan_msg):
         
         subsample_rate = len(laser_scan_msg.ranges)/self.eval_beams
-        subsamples_ranges = []
+        subsampled_ranges = []
         for i in range(self.eval_beams):
-            subsamples_ranges.append(laser_scan_msg.ranges[int(i*subsample_rate)])
-        return subsamples_ranges
+            if laser_scan_msg.ranges[int(i*subsample_rate)] == inf:
+                subsampled_ranges.append(self.laser_max_range)
+            else:
+                subsampled_ranges.append(laser_scan_msg.ranges[int(i*subsample_rate)])
+        return subsampled_ranges
 
     # function calls self.subsample_laser_scan to get the laserscans from robot
     # function calls self.calls get_laser_scan_for_particles to calculate the laserscans for the particle in the argument
     # function then calculates the error between the scans
-    def get_prediction_error(self, laser_scan_msg, particle):
-        pass
+    def get_prediction_error(self, laser_scan_msg):
+        subsampled_ranges = self.subsample_laser_scan(laser_scan_msg)
+        for particle in self.particles:
+            particle_ranges = self.get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
+            diff_ranges = []
+            for range_i in range(len(particle_ranges)):
+                diff_ranges.append(abs(subsampled_ranges[range_i]-particle_ranges[range_i]))
+            norm_error = np.linalg.norm(diff_ranges)
+            error = pow(norm_error,2)
+            rospy.loginfo(error)
+            return error
+                
+
 
     # function calculates the relative motion between the last and current odometry measurement
     # function therefore uses the difference of previous and current x,y position and yaw angle 
     def predict_particle_odometry(self, odom, last_odom):
-
-        
         position = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
         last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
         orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
@@ -249,7 +258,7 @@ class MonteCarloLocalization(object):
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
 
 
-    def laser_scan_callback(self, msg):
+    def laser_scan_callback (self, msg):
         self.pf.laser_min_angle = msg.angle_min
         self.pf.laser_max_angle = msg.angle_max
         self.pf.laser_min_range = msg.range_min
