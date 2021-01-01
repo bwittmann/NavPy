@@ -34,6 +34,17 @@ In the future the costmap generator should also be able to change the global cos
 request: map_nr_switch (int8)
 response: sucess (bool)
 
+### rto_global_planner
+This package includes a node called 'rto_global_planner'.
+
+The main function is to generate a global path. It is now according to costmap provided by move_base node, still some problems with our own costmap and map server. 
+
+To see the global path in rviz, run the following code in terminal.
+
+        roslaunch rto_global_planner navigation.launch
+        
+        roslaunch rto_global+planner global_planner.launch
+
 
 ## Simulation Worlds
 
