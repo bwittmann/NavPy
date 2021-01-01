@@ -2,8 +2,9 @@
 
 import rospy
 import numpy as np
-import cv2  # For possibility to return a picture of the costmap
+import cv2
 import os
+import time
 
 from threading import Thread
 from nav_msgs.msg import OccupancyGrid
@@ -12,10 +13,26 @@ from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
 
-# TODO: use a latched topic
-# TODO: think about use of threads
-# TODO: do we need a mutex for a service call?
+# TODO: Use a latched topic.
+# TODO: Increase performance of _padd_static_map()
+# TODO: Think about use of threads again.
+# TODO: Do we need a mutex for a service call?
+# TODO: Add service for changing global costmap? Static?
+# TODO: rospy.Time.now() seems to work now. Check also map_server
 
+
+# Create wrapper for easy timing of methods
+def timed(func):
+    def wrapper(*args):
+        if not log_times:
+            return func(*args)
+        time_start = time.time()
+        out = func(*args)
+        time_end = time.time()
+        time_took = time_end - time_start
+        rospy.loginfo('Method {} from map gen took {}s.'.format(func.__name__, time_took))
+        return out
+    return wrapper
 
 # Create wrapper for easy threading by using a decorator
 def threaded(fn):
@@ -31,8 +48,11 @@ class CostmapGenerator():
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
         self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
-             rospy.get_param('~global_costmap')['safety_distance']
-        self.cost_decay = rospy.get_param('~global_costmap')['cost_decay']
+             rospy.get_param('~global_costmap')['safety_distance']      # Unit: m
+        self.padded_val = rospy.get_param('~global_costmap')['padded_val']
+        self.decay_type = rospy.get_param('~global_costmap')['decay_type']
+        self.soft_padding = rospy.get_param('~global_costmap')['decay_distance']    # Unit: m
+        self.log_times = rospy.get_param('~log_times')
 
         # Init publisher 
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
@@ -40,9 +60,29 @@ class CostmapGenerator():
         # Get static map from map server via request to service 'get_map'
         self._call_get_map_srv()
 
+        # Transfer 'soft' and 'hard' padding from m in cell units
+        self.hard_padding = np.ceil(self.hard_padding / self.static_map.info.resolution)
+        decay_steps = np.ceil(self.soft_padding / self.static_map.info.resolution)
+
+        # Set val of soft_padding based on decay type
+        if self.decay_type == 'exponential':
+            self.soft_padding = [int(100*np.exp(-x)-1) for x in np.linspace(0, 3.9, decay_steps)]
+        elif self.decay_type == 'reciprocal':
+            self.soft_padding = [int(1/(x + 0.0101)) for x in np.linspace(0, 0.9891, decay_steps)]
+        elif self.decay_type == 'linear':
+            self.soft_padding = [int((100 - x)) for x in np.linspace(1, 99, decay_steps)]
+        else:
+            rospy.logerr("Decay type '{}' is not defined.".format(self.decay_type))
+
+        # Start the service to make the costmap gen switch maps
         self._start_switchmaps_service()
 
+        # Padd the static map based on parameters
         self._padd_static_map()
+
+        # Publish padded map on topic /global_costmap (latched)
+        self.static_map.header.stamp = rospy.Time.now()
+        self.pub_global_costmap.publish(self.static_map)
 
 
     def _call_get_map_srv(self):
@@ -54,6 +94,7 @@ class CostmapGenerator():
         except rospy.ServiceException:
             rospy.logerr("Costmap generator could not receive map from map server.")
             return False
+
 
     @threaded
     def _start_switchmaps_service(self):
@@ -68,19 +109,44 @@ class CostmapGenerator():
             rospy.loginfo('Map gen changed map in map server to: map{}.'.format(self.map_nr))
         return sucess
 
-
-    # TODO: finish this method
+    @timed
     def _padd_static_map(self):
         global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
-        #cv2.imwrite('test.jpg', global_costmap) print as uint8
-        
 
+        # Get index of occupied cells
+        occupied_index = np.where(global_costmap == 100)
+
+        # Loop over occupied cells
+        for coord in zip(occupied_index[0], occupied_index[1]):
+            x_occu, y_occu = coord
+
+            # Use 'open grid' function to create a 'circular' mask for efficient padding
+            grid = np.ogrid[-x_occu:self.static_map.info.height-x_occu, -y_occu:self.static_map.info.width-y_occu]
+
+            # Apply 'hard padding'
+            mask_hard_padding = grid[1]*grid[1] + grid[0]*grid[0] <= self.hard_padding * self.hard_padding
+            global_costmap[mask_hard_padding] = self.padded_val
+            
+            # Apply 'soft padding' for each step in the decay of the cost
+            for idx, val in enumerate(self.soft_padding, start=1):
+                masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
+                    & (global_costmap < val) #& (global_costmap > -1) for performance reasons
+                global_costmap[masks_soft_padding] = val
+
+        # Uncomment for testing and to receive an image of the global_costmap
+        #cv2.imwrite('map_padded_comp2.jpg', global_costmap.astype(np.uint8))
+        #print(np.unique(global_costmap))
+
+        self.static_map.data = global_costmap.ravel()
+
+    '''
     def run(self):
         #rospy.spin()
         while not rospy.is_shutdown():
             print('running')
             rospy.sleep(1)
         pass
+    '''
 
 
 
@@ -88,5 +154,7 @@ if __name__ == "__main__":
 
     # Initialize a ROS node named map_server
     rospy.init_node('costmap_generator')
+
+    log_times = rospy.get_param('~log_times')
 
     costmap_gen = CostmapGenerator()

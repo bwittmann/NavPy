@@ -10,17 +10,22 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
-# from rto_map_server.srv import GetMap
-
-#TODO:fix bugs in the algorithm
 #TODO:fit it to different maps
 #TODO:make it can publish command to cmd_vel
-#TODO:fit to different resolutions
-#TODO:speed up second search
+#TODO:fit to different maps
+#TODO:speed up search
+#TODO:consider the point is valid but cannot be reached
+#TODO:add threading
+#TODO:use initial position from amcl node
 
 class Node():
     """
     A node class for A* Pathfinding
+    @parameter parent: parent node
+    @parameter position: position on map
+    @parameter g: cost from start position to current position
+    @parameter h: heuristic cost from current position to goal
+    @parameter f: sum of g and h
     """
 
     def __init__(self, parent=None, position=None):
@@ -42,16 +47,19 @@ class Astar_Planner():
     def getMinNode(self):
         """
         try to find the node with minimal f in openlist
+
+        @return: the node with minimal f value
         """
         currentNode = self.open_list[0]
         for node in self.open_list:
-            if node.g + node.h < currentNode.g + currentNode.h:
+            # if node.g + node.h < currentNode.g + currentNode.h:
+            if node.f < currentNode.f:
                 currentNode = node
         return currentNode
 
     def pointInCloseList(self, position):
         """
-        determine if a node is in closedlist
+        determine if a position is in closelist
         """
         for node in self.closed_list:
             if node.position == position:
@@ -60,7 +68,7 @@ class Astar_Planner():
 
     def pointInOpenList(self, position):
         """
-        determine if a node is in openlist
+        determine if a position is in openlist
         """
         for node in self.open_list:
             if node.position == position:
@@ -69,7 +77,7 @@ class Astar_Planner():
 
     def endPointInCloseList(self):
         """
-        determine if a node is endnode
+        determine if goal is already in closelist
         """
         for node in self.closed_list:
             if node.position == self.endnode.position:
@@ -78,19 +86,18 @@ class Astar_Planner():
 
     def search(self, minF, offsetX, offsetY):
         """
-        search action with minimal f for next step
+        search action for next step and add this node to openlist
         """
 
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
 
-        #TODO:update out of boundary rule
         # if the offset is out of boundary
         if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
             return
 
         # if the offset is valid
-        elif self.map[int(node_pos[0])][int(node_pos[1])] != 0:
-            return
+        # elif self.map[int(node_pos[0])][int(node_pos[1])] != 0:
+        #     return
 
         # if the node is in closed set, then pass
         elif self.pointInCloseList(node_pos):
@@ -101,24 +108,27 @@ class Astar_Planner():
             currentNode = self.pointInOpenList(node_pos)
             if not currentNode:
                 currentNode = Node(minF, node_pos)
-                currentNode.g = minF.g + 1
-                currentNode.h = abs(node_pos[0] - self.endnode.position[0]) + abs(node_pos[1] - self.endnode.position[1])
+                currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
+                currentNode.h = abs(node_pos[0] - self.endnode.position[0]) + abs(node_pos[1] - self.endnode.position[1]) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
                 self.open_list.append(currentNode)
                 return
+            # if it is in openlist, determine if g of currentnode is smaller
             else:
-                # if it is in openlist, determine if g of currentnode is smaller
-                if minF.g + 1 < currentNode.g:
-                    currentNode.g = minF.g + 1
+                action_cost = np.sqrt(offsetX * offsetX + offsetY * offsetY)
+                if minF.g + action_cost < currentNode.g:
+                    currentNode.g = minF.g + action_cost
                     currentNode.parent = minF
                     return
 
     def astar(self, gridmap, map_width, map_height, start, end):
         """
         main function of astar search
+
+        @return: a global path
         """
 
-        # Initialize end node and start node
+        # Initialize endnode and startnode
         self.startnode = Node(None, start)
         self.startnode.g = self.startnode.h = self.startnode.f = 0
         self.endnode = Node(None, end)
@@ -146,9 +156,14 @@ class Astar_Planner():
             self.search(minF, 1, 0)
             self.search(minF, 0, -1)
             self.search(minF, -1, 0)
+            self.search(minF, 1, 1)
+            self.search(minF, 1, -1)
+            self.search(minF, -1, 1)
+            self.search(minF, -1, -1)
 
             # determine if it the endpoint
             endnode = self.endPointInCloseList()
+            # if it is endnode, then return a path
             if endnode:
                 path = []
                 current = endnode
@@ -165,9 +180,9 @@ class main():
     def __init__(self):
 
         # Initialize Subscribers
-        self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
-        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
-        self.sub_map = rospy.Subscriber('/map', OccupancyGrid, self.callback_map)
+        # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
+        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
+        # self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -193,16 +208,18 @@ class main():
         self.msg_path_marker.color.b = 1.0
         self.msg_path_marker.pose.orientation = Quaternion(0, 0, 0, 1)
 
-    def callback_pos(self, PoseWithCovarianceStamped):
-        """
-        callback of position
-        """
-        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x + 3.246519) / 0.05)
-        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y + 3.028618) / 0.05)
+    # Wait for amcl part to provide it with initial position
+    # def callback_pos(self, PoseWithCovarianceStamped):
+    #     """
+    #     callback of position
+    #     """
+    #     self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x + 3.246519) / 0.05)
+    #     self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y + 3.028618) / 0.05)
+        # print(PoseWithCovarianceStamped.pose.pose.position)
 
-    def callback_map(self, OccupancyGrid):
+    def callback_costmap(self, OccupancyGrid):
         """
-        callback of map
+        callback of costmap
         """
         self.map_input = np.array(OccupancyGrid.data)
         self.map_width = OccupancyGrid.info.width
@@ -214,6 +231,7 @@ class main():
         """
         callback of goal
         """
+        #TODO:replace parameter here according to map parameter
         # shift position to position in map
         self.goal_x = int((PoseStamped.pose.position.x + 3.246519) / 0.05)
         self.goal_y = int((PoseStamped.pose.position.y + 3.028618) / 0.05)
@@ -222,7 +240,10 @@ class main():
         """
         check the validility of goal
         """
-        if self.map[int(goalx)][int(goaly)] == 0:
+        if goalx > self.map_width - 1 or goaly > self.map_height - 1:
+            rospy.logwarn('Goal is out of boundary')
+            return None
+        elif self.map[int(goalx)][int(goaly)] < 90:
             return True
         else:
             return None
@@ -237,6 +258,9 @@ class main():
             global_planner = Astar_Planner()
 
             # initialize start node
+            # start = (self.pos_x, self.pos_y)
+            self.pos_x = int((0.09035 + 3.246519) / 0.05)
+            self.pos_y = int((0.01150 + 3.028618) / 0.05)
             start = (self.pos_x, self.pos_y)
 
             if self.check_valid(self.goal_x, self.goal_y):

@@ -1,6 +1,6 @@
 <launch>
     <arg name="robot_env" default="$(optenv ROBOT_ENV sim_simple)"/>
-    <arg name="safety" default="true"/>
+    <!-- <arg name="safety" default="true"/> -->
 
     <arg name="map_file" value="$(find rto_navigation)/maps/$(arg robot_env).yaml" />
 
@@ -32,7 +32,7 @@
     </node>
 
     <!-- Run rto_safety_node -->
-    <group if="$(arg safety)">
+    <!-- <group if="$(arg safety)">
         <include file="$(find rto_safety)/launch/rto_safety_node.launch"/>    
-    </group>
+    </group> -->
 </launch>
