@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import rospy
-import tf
+import tf2_ros
 import tf.transformations as transform
 from std_msgs.msg import String, Header, ColorRGBA
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
-from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped
+from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped, TransformStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
 from math import sqrt, cos, sin, pi, atan2, inf, log, exp
@@ -64,10 +64,6 @@ class ParticleFilter(object):
         self.dy = 0
         self.dyaw = 0
 
-        #tf Transform
-        self.t = tf.Transformer(True, rospy.Duration(10.0))
-        self.listener = tf.TransformListener()
-
         # Std deviation of noise affecting translation in the dynamics model for particles
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
 
@@ -83,17 +79,19 @@ class ParticleFilter(object):
         # list of particles and corresponding weights of length num_particles
         self.particles = []
         self.weights = [1]*self.num_particles
+
+    def coordinates_to_map(self ,x_grid , y_grid, yaw_grid):
+
+        """
+        TODO: Transform from particles which are in laserscanframe to robot pos frame
+        """
+        x_continous, y_continous = self.grid_to_continous(x_grid, y_grid)
+        x = x_continous-self.ogm.map.info.origin.position.x
+        y = y_continous-self.ogm.map.info.origin.position.y
+        _, _, orientation_yaw = transform.euler_from_quaternion([self.ogm.map.info.origin.orientation.w, self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z])
+        yaw = yaw_grid-orientation_yaw
+        return x, y, yaw
     
-    def _coordinates_to_grid_transform(self ,x , y):
-        """
-        transform continous coordinates into valid cell locations in ogm
-        """
-        grid_x = int(x-self.ogm.map.info.origin.position.x/self.ogm.map.info.resolution)
-        grid_y = int(y-self.ogm.map.info.origin.position.y/self.ogm.map.info.resolution)
-        grid_x_in_xrange = min(max(0, grid_x), self.xmax)
-        grid_y_in_yrange = min(max(0, grid_y), self.ymax)
-        return grid_x_in_xrange, grid_y_in_yrange
-        
     def grid_to_continous(self, x_grid, y_grid):
         x_continous = x_grid*self.resolution
         y_continous = y_grid*self.resolution
@@ -102,8 +100,12 @@ class ParticleFilter(object):
     def continous_to_grid(self, x_continous, y_continous):
         grid_x_in_xrange = int(x_continous/self.resolution)
         grid_y_in_yrange = int(y_continous/self.resolution)
-        #grid_x_in_xrange = min(max(0, x_grid), self.xmax)
-        #grid_y_in_yrange = min(max(0, y_grid), self.ymax)
+        """
+        TODO: maybe just transform x,y coordinates to grid cells but this will maybe caus problems because x_continous is then different to x_grid
+              --> better to check later if x_grid, y_grid if it is a valid position
+        grid_x_in_xrange = min(max(0, x_grid), self.xmax)
+        grid_y_in_yrange = min(max(0, y_grid), self.ymax)
+        """
         return grid_x_in_xrange, grid_y_in_yrange
 
     def _get_random_free_space(self):
@@ -213,7 +215,6 @@ class ParticleFilter(object):
 
             if check_if_obstacle_is_sensed == 0:
                 particle_ranges.append(self.laser_max_range)
-        rospy.loginfo(particle_ranges)
         return particle_ranges
 
 
@@ -303,6 +304,14 @@ class ParticleFilter(object):
         particle.x, particle.y = self.continous_to_grid(particle_x_continous_update, particle_y_continous_update)
         particle.yaw = self.dyaw + uncertainty_orientation
 
+    def get_position(self):
+        max_index = np.argmax(self.weights)
+        x_grid = self.particles[max_index].x
+        y_grid = self.particles[max_index].y
+        yaw_grid = self.particles[max_index].yaw
+        x, y, yaw = self.coordinates_to_map(x_grid, y_grid, yaw_grid)
+        return x, y, yaw
+
 class MonteCarloLocalization(object):
 
     #initializes object of MonteCarloLocalization and sets all parameters
@@ -339,9 +348,8 @@ class MonteCarloLocalization(object):
         # initialize particles of pf
         self.pf.init_particles()
 
-        #tf Transform
-        self.t = tf.Transformer(True, rospy.Duration(10.0))
-        self.listener = tf.TransformListener()
+        #tf brodcaster
+        self.br = tf2_ros.TransformBroadcaster()
 
         # Subscribers (LaserScan, Odometry)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1)
@@ -350,17 +358,22 @@ class MonteCarloLocalization(object):
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
 
     def laser_scan_callback (self, msg):
+
+        # set min and max range, angle of laser
         self.pf.laser_min_angle = msg.angle_min
         self.pf.laser_max_angle = msg.angle_max
         self.pf.laser_min_range = msg.range_min
         self.pf.laser_max_range = msg.range_max
 
+        # set subsampled laserscans
         """
         TODO: angle_min = -2.0*pi and angle_max = 2.0*pi is dangerous angle_max-angle_min = 4.0 pi = 720 degree
         """
         subsampled_angles = np.linspace(0, msg.angle_max, self.eval_beams)
         self.pf.subsampled_angles = subsampled_angles
         
+
+        # measurement update
         if self.last_laser_scan:
             #header.stamp creates a timestamp where it concatinates secs and nsecs. dt is a nsecs value
             dt = msg.header.stamp - self.last_laser_scan.header.stamp
@@ -369,29 +382,49 @@ class MonteCarloLocalization(object):
         self.last_laser_scan = msg
 
     def odometry_callback(self, msg):
-        """
-        #transform from frame /odom to frame /base_link
-        now = rospy.Time.now()
-        self.listener.waitForTransform('/odom', '/base_link', now, rospy.Duration(4.0)) 
-        pose_msg = PoseStamped()
-        pose_msg.header.frame_id = msg.header.frame_id
-        pose_msg.header.stamp = msg.header.stamp
-        pose_msg.pose = msg.pose.pose
-        self.odometry = self.listener.transformPose('/base_link', pose_msg)
-  
-        #call handle_odometry
-        if self.last_odometry:
-            self.pf.handle_odometry(self.odometry, self.last_odometry)
-        self.last_odometry = self.odometry
-        """
         self.odometry = msg
+        #prediction
         if self.last_odometry:
             self.pf.handle_odometry(self.odometry, self.last_odometry)
         self.last_odometry = self.odometry
 
+    def broadcast_frame_transformation(self):
+        # get most likely robot pose from particle filter
+            x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
+            
+            # get pose from odometry
+            x_Odometry = self.odometry.pose.pose.position.x
+            y_Odometry = self.odometry.pose.pose.position.y
+            _, _, yaw_Odometry = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.w, self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z])
+            
+            #calculate diff in pose
+
+            """
+            TODO: is the diff calculated in the right way or the other way round?
+            """
+            x_diff = x_Particle_Filter-x_Odometry
+            y_diff = y_Particle_Filter-y_Odometry
+            yaw_diff = yaw_Particle_Filter-yaw_Odometry
+            q = transform.quaternion_from_euler(0,0,yaw_diff)
+            
+            broadcast_msg = TransformStamped()
+            broadcast_msg.header.stamp = rospy.Time.now()
+            broadcast_msg.header.frame_id = "map"
+            broadcast_msg.child_frame_id = "odom"
+            broadcast_msg.transform.translation.x = x_diff
+            broadcast_msg.transform.translation.y = y_diff
+            broadcast_msg.transform.translation.z = 0.0
+            broadcast_msg.transform.rotation.x = q[0]
+            broadcast_msg.transform.rotation.y = q[1]
+            broadcast_msg.transform.rotation.z = q[2]
+            broadcast_msg.transform.rotation.w = q[3]
+            #self.br.sendTransform(broadcast_msg)
+
     def run(self):
         rate = rospy.Rate(20)
         while not rospy.is_shutdown():
+            if self.odometry != None:
+                self.broadcast_frame_transformation()
             rate.sleep()
     
 if __name__ == '__main__':
