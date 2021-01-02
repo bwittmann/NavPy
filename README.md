@@ -43,7 +43,7 @@ To see the global path in rviz, run the following code in terminal.
 
         roslaunch rto_global_planner navigation.launch
         
-        roslaunch rto_global+planner global_planner.launch
+        roslaunch rto_global_planner global_planner.launch
 
 
 ## Simulation Worlds
