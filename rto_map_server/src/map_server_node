@@ -47,6 +47,9 @@ class MapServer():
         # Get parameters from parameter server
         self.maps_nr = rospy.get_param('~maps_nr')
 
+        # Init publisher
+        self.pub_map = rospy.Publisher('/map', OccupancyGrid, queue_size=10, latch=True)
+
         # Get the time when maps were loaded for OccupancyGrid message
         self.load_time = rospy.Time.now()
 
@@ -75,6 +78,9 @@ class MapServer():
 
         # Perpare messages for the service
         self._get_occupancy_grid()
+
+        # Publish initial map once on latched topic (for visualization in rvis)
+        self.pub_map.publish(self.occupancy_grids['map1'])
 
         if len(self.occupancy_grids) == 0:
             rospy.logwarn('The map server currently stores 0 maps')
@@ -117,6 +123,7 @@ class MapServer():
         Handler method for the service 'get_map', which returns the fitting OccupancyGrid to the
         incoming request.
 
+        @param req: An integer referring to the map number to return.
         @return: A OccupancyGrid message corresponding to the map number of the request.
         """
         if 'map' + str(req.map_nr) not in self.occupancy_grids:
@@ -127,6 +134,10 @@ class MapServer():
 
             # Add time stamp to response message
             self.occupancy_grids['map' + str(req.map_nr)].header.stamp = rospy.Time.now()
+
+            # Publish new map on latched topic (for rvis)
+            self.pub_map.publish(self.occupancy_grids['map' + str(req.map_nr)])
+
             return self.occupancy_grids['map' + str(req.map_nr)]
 
 

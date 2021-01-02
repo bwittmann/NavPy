@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 import rospy
-import tf
+import tf2_ros
 import tf.transformations as transform
 from std_msgs.msg import String, Header, ColorRGBA
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
-from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped
+from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped, TransformStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
-from math import sqrt, cos, sin, pi, atan2, inf
-
+from math import sqrt, cos, sin, pi, atan2, inf, log, exp
 from threading import Thread, Lock
-from math import pi, log, exp
 import random
 import numpy as np
-import sys
-import pickle
+
 
 from rto_map_server.srv import GetMap
 
@@ -29,6 +26,8 @@ class ParticleFilter(object):
     
     # initialize object of ParticleFilter and set all the parameters
     def __init__(self, num_particles, occ_grid_map,
+  
+
                  laser_min_range, laser_max_range, laser_min_angle, laser_max_angle, subsampled_angles, eval_beams, 
                  dynamics_translation_noise_std_dev,
                  dynamics_orientation_noise_std_dev,
@@ -50,6 +49,7 @@ class ParticleFilter(object):
         self.xmax = occ_grid_map.map.info.height-1
         self.ymin = 0
         self.ymax = occ_grid_map.map.info.width-1
+        self.resolution = occ_grid_map.map.info.resolution
 
         # laser setup
         self.laser_max_angle = laser_max_angle
@@ -63,10 +63,6 @@ class ParticleFilter(object):
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
-
-        #tf Transform
-        self.t = tf.Transformer(True, rospy.Duration(10.0))
-        self.listener = tf.TransformListener()
 
         # Std deviation of noise affecting translation in the dynamics model for particles
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
@@ -82,43 +78,69 @@ class ParticleFilter(object):
 
         # list of particles and corresponding weights of length num_particles
         self.particles = []
-        self.weights = []
-    
-    #function which transforms a real x,y cooridinate into the location of a cell in the ogm
-    def _coordinates_to_grid_transform(self ,x , y):
-        grid_x = int(x-self.ogm.map.info.origin.position.x/self.ogm.map.info.resolution)
-        grid_y = int(y-self.ogm.map.info.origin.position.y/self.ogm.map.info.resolution)
-        grid_x_in_xrange = min(max(0, grid_x), self.xmax)
-        grid_y_in_yrange = min(max(0, grid_y), self.ymax)
-        return grid_x_in_xrange, grid_y_in_yrange
-        
+        self.weights = [1]*self.num_particles
 
-    # function which randomly samples x,y positions in the free space of the map
+    def coordinates_to_map(self ,x_grid , y_grid, yaw_grid):
+
+        """
+        TODO: Transform from particles which are in laserscanframe to robot pos frame
+        """
+        x_continous, y_continous = self.grid_to_continous(x_grid, y_grid)
+        x = x_continous-self.ogm.map.info.origin.position.x
+        y = y_continous-self.ogm.map.info.origin.position.y
+        _, _, orientation_yaw = transform.euler_from_quaternion([self.ogm.map.info.origin.orientation.w, self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z])
+        yaw = yaw_grid-orientation_yaw
+        return x, y, yaw
+    
+    def grid_to_continous(self, x_grid, y_grid):
+        x_continous = x_grid*self.resolution
+        y_continous = y_grid*self.resolution
+        return x_continous, y_continous
+
+    def continous_to_grid(self, x_continous, y_continous):
+        grid_x_in_xrange = int(x_continous/self.resolution)
+        grid_y_in_yrange = int(y_continous/self.resolution)
+        """
+        TODO: maybe just transform x,y coordinates to grid cells but this will maybe caus problems because x_continous is then different to x_grid
+              --> better to check later if x_grid, y_grid if it is a valid position
+        grid_x_in_xrange = min(max(0, x_grid), self.xmax)
+        grid_y_in_yrange = min(max(0, y_grid), self.ymax)
+        """
+        return grid_x_in_xrange, grid_y_in_yrange
+
     def _get_random_free_space(self):
+        """
+        randomly samples x,y positions in the free space of the map
+        """
+
         while True:
-            x_random = np.random.uniform(self.xmin, self.xmax)
-            y_random = np.random.uniform(self.ymin, self.ymax)
-            x, y = self._coordinates_to_grid_transform(x_random, y_random)
-            if x != 100 and y != 100:
+            x = np.random.randint(self.xmin, self.xmax)
+            y = np.random.randint(self.ymin, self.ymax)
+
+            if self.ogm_map[x,y] != 100:
                 break
+
         yaw = np.random.uniform(0,2*pi)
         return x, y, yaw
 
-    # function which initilizes num_particles of particles
     def init_particles(self):
+        """
+        function which initilizes num_particles of particles
+        """
+
         for i in range(self.num_particles):
             x, y, yaw = self._get_random_free_space()
             particle = Particle(i, x, y, yaw)
             self.particles.append(particle)
 
-    # function which updates the particle it includes prediction, update
-    # from there it calculates a weight for each particle which is used for resampling 
-    def handle_observation(self, laser_scan_msg, dt):
 
+    def handle_observation(self, laser_scan_msg, dt):
         """
-        just random function call to check whether the functions work
+        prediction and measurement update is started
         """
+
         weights_not_normalized =[]
+
         for particle in self.particles:
             self.predict_odometry(particle)
             error = self.get_prediction_error(laser_scan_msg, particle)
@@ -127,31 +149,60 @@ class ParticleFilter(object):
         self.weights = [i/sum(weights_not_normalized) for i in weights_not_normalized]
         self.resample()
 
-    # resample a new set oof particles from the old particles by considering their weights calculated earlier
     def resample(self):
         """
-        TODO: just sample valid particles which are in min, max range and not within an obstacles
+        resample a new set of particles (systematic resampling)
         """
-        pass    
 
-    # calculates the laserscans the robot would deliver in the pose (x,y,yaw) of the particle
+        new_particles = []
+        index = random.randint(0,self.num_particles-1)
+        max_weight = max(self.weights)
+        beta = 0
+
+        for i in range(self.num_particles):
+            beta += random.uniform(0, 2*max_weight)
+
+            while self.weights[index] < beta:
+                beta -= self.weights[index]
+
+                if (index+1) <= (self.num_particles-1):
+                    index += 1
+                else:
+                    index = 0
+      
+            particle = self.particles[index]
+            new_particle = Particle(particle.id, particle.x, particle.y, particle.yaw)
+            new_particles.append(new_particle)
+        
+        self.particles = new_particles
+
+
     def get_laser_scan_for_particle(self, x, y, yaw):
+        """
+        simulate what a the robot would sense with laser if it is located in particle pose (x,y,yaw)
+        """
 
         particle_ranges = []
         step = self.ogm.map.info.resolution
+
         for i in self.subsampled_angles:
             angle = i+yaw
             distance = self.laser_min_range
             check_if_obstacle_is_sensed = 0
+
             while distance < self.laser_max_range:
-                x_scan = x + cos(angle)*distance
-                y_scan = y + sin(angle)*distance
-                x_grid, y_grid = self._coordinates_to_grid_transform(x_scan, y_scan)
+                """
+                TODO: check if transformation between grid position and continous position
+                """
+                x_continous, y_continous = self.grid_to_continous(x,y)
+                x_scan = x_continous + cos(angle)*distance
+                y_scan = y_continous + sin(angle)*distance
+                x_grid, y_grid = self.continous_to_grid(x_scan, y_scan)
                 
                 """
                 TODO:check if when x_scan and y_scan is outside of x_min, x_max, y_min, y_max what would the robot sense? inf?
                 """
-                if (x_grid < self.xmin and x_grid >= self.xmax) or (y_grid < self.ymin and y_grid >= self.ymax):
+                if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax:
                     particle_ranges.append(self.laser_max_range)
                     check_if_obstacle_is_sensed = 1
                     break
@@ -164,40 +215,58 @@ class ParticleFilter(object):
 
             if check_if_obstacle_is_sensed == 0:
                 particle_ranges.append(self.laser_max_range)
-            
         return particle_ranges
 
-    # function which subsamples from the whole laser_input the laserscans which are needed for the measurement update
-    # just self.eval_beams are needed and scans should be between between self.laser_min_range and self.laser_max_range
+
     def subsample_laser_scan(self, laser_scan_msg):
+        """
+        subsample number of beams from output of laser and set inf to laser_max_range
+        """
         
         subsample_rate = len(laser_scan_msg.ranges)/self.eval_beams
         subsampled_ranges = []
+
+        #pick eval_beams equally distributed in laser_range
         for i in range(self.eval_beams):
+            # check if laser_range = inf
             if laser_scan_msg.ranges[int(i*subsample_rate)] == inf:
                 subsampled_ranges.append(self.laser_max_range)
             else:
                 subsampled_ranges.append(laser_scan_msg.ranges[int(i*subsample_rate)])
+
         return subsampled_ranges
 
-    # function calls self.subsample_laser_scan to get the laserscans from robot
-    # function calls self.calls get_laser_scan_for_particles to calculate the laserscans for the particle in the argument
-    # function then calculates the error between the scans
     def get_prediction_error(self, laser_scan_msg, particle):
-        subsampled_ranges = self.subsample_laser_scan(laser_scan_msg)
-        particle_ranges = self.get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
-        diff_ranges = []
-        for range_i in range(len(particle_ranges)):
-            diff_ranges.append(abs(subsampled_ranges[range_i]-particle_ranges[range_i]))
-        norm_error = np.linalg.norm(diff_ranges)
-        error = pow(norm_error,2)
-        return error
+        """
+        calculate error of particle from:
+        1) diff in robot scan and particle scan 
+        2) position of robot is in free space
+        """
+        # high error for particles outside of ogm or within an obstacle
+        if particle.x < self.xmin or particle.x > self.xmax or particle.x < self.ymin or particle.y > self.ymax or (self.ogm_map[particle.x, particle.y] == 100):
+            error = 300
+            return error
+
+        # get robot laser_scan and simulated laser_scan from particle to calculate difference of those
+        else:
+            subsampled_ranges = self.subsample_laser_scan(laser_scan_msg)
+            particle_ranges = self.get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
+            diff_ranges = []
+
+            for range_i in range(len(particle_ranges)):
+                diff_ranges.append(abs(subsampled_ranges[range_i]-particle_ranges[range_i]))
+
+            # mean squared error from difference in all eval_beams ranges
+            norm_error = np.linalg.norm(diff_ranges)
+            error = pow(norm_error,2)
+            return error
                 
-
-
-    # function calculates the relative motion between the last and current odometry measurement
-    # function therefore uses the difference of previous and current x,y position and yaw angle 
     def handle_odometry(self, odom, last_odom):
+        """
+        calculate relative motion between the last and current odometry measurement
+        """
+
+        # last and current position and orientation in numpy array
         position = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
         last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
         orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
@@ -209,7 +278,6 @@ class ParticleFilter(object):
         # transform quatermion form of ortientation to euler form of orientation (roll, pitch, yaw)
         _, _, yaw_diff = transform.euler_from_quaternion(diff_orientation_quaternion)
 
-        # diff in position can be easly calculated by subtracting x,y,z coordinates
         diff_position = position-last_position
 
         self.dx = diff_position[0]
@@ -217,11 +285,32 @@ class ParticleFilter(object):
         self.dyaw = yaw_diff
 
     def predict_odometry(self, particle):
+        """
+        predicts particle according to odometry
+        """
+
         uncertainty_translation = np.random.normal(0, self.dynamics_translation_noise_std_dev)
         uncertainty_orientation = np.random.normal(0, self.dynamics_orientation_noise_std_dev)
-        particle.x = self.dx + uncertainty_translation
-        particle.y = self.dy + uncertainty_translation
+
+        # relative motion with uncertainty
+        dx = self.dx + uncertainty_translation
+        dy = self.dy + uncertainty_translation
+        dyaw = self.dyaw + uncertainty_orientation
+
+        # transform position of particle to position in continous space, add relative motion and transform position of particle back to ogm cell
+        particle_x_continous, particle_y_continous= self.grid_to_continous(particle.x, particle.y)
+        particle_x_continous_update = particle_x_continous + dx
+        particle_y_continous_update = particle_y_continous + dy
+        particle.x, particle.y = self.continous_to_grid(particle_x_continous_update, particle_y_continous_update)
         particle.yaw = self.dyaw + uncertainty_orientation
+
+    def get_position(self):
+        max_index = np.argmax(self.weights)
+        x_grid = self.particles[max_index].x
+        y_grid = self.particles[max_index].y
+        yaw_grid = self.particles[max_index].yaw
+        x, y, yaw = self.coordinates_to_map(x_grid, y_grid, yaw_grid)
+        return x, y, yaw
 
 class MonteCarloLocalization(object):
 
@@ -245,22 +334,22 @@ class MonteCarloLocalization(object):
         self.last_odometry = None
         self.eval_beams = 32
 
-        #read in parameters from launch ParticleFilter
+        #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
         dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
         beam_range_measurement_noise_std_dev = rospy.get_param("~beam_range_measurement_noise_std_dev")
 
-        # ParticleFilter
+        # instantiate ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0, 0, self.eval_beams, 
                                  dynamics_translation_noise_std_dev,
                                  dynamics_orientation_noise_std_dev,
                                  beam_range_measurement_noise_std_dev)
 
+        # initialize particles of pf
         self.pf.init_particles()
 
-        #tf Transform
-        self.t = tf.Transformer(True, rospy.Duration(10.0))
-        self.listener = tf.TransformListener()
+        #tf brodcaster
+        self.br = tf2_ros.TransformBroadcaster()
 
         # Subscribers (LaserScan, Odometry)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1)
@@ -268,52 +357,76 @@ class MonteCarloLocalization(object):
 
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
 
-
     def laser_scan_callback (self, msg):
+
+        # set min and max range, angle of laser
         self.pf.laser_min_angle = msg.angle_min
         self.pf.laser_max_angle = msg.angle_max
         self.pf.laser_min_range = msg.range_min
         self.pf.laser_max_range = msg.range_max
 
-        subsampled_angles = np.linspace(msg.angle_min, msg.angle_max, self.eval_beams)
+        # set subsampled laserscans
+        """
+        TODO: angle_min = -2.0*pi and angle_max = 2.0*pi is dangerous angle_max-angle_min = 4.0 pi = 720 degree
+        """
+        subsampled_angles = np.linspace(0, msg.angle_max, self.eval_beams)
         self.pf.subsampled_angles = subsampled_angles
         
+
+        # measurement update
         if self.last_laser_scan:
             #header.stamp creates a timestamp where it concatinates secs and nsecs. dt is a nsecs value
             dt = msg.header.stamp - self.last_laser_scan.header.stamp
             self.pf.handle_observation(msg,dt)
 
-
         self.last_laser_scan = msg
 
     def odometry_callback(self, msg):
-        """
-        #transform from frame /odom to frame /base_link
-        now = rospy.Time.now()
-        self.listener.waitForTransform('/odom', '/base_link', now, rospy.Duration(4.0)) 
-        pose_msg = PoseStamped()
-        pose_msg.header.frame_id = msg.header.frame_id
-        pose_msg.header.stamp = msg.header.stamp
-        pose_msg.pose = msg.pose.pose
-        self.odometry = self.listener.transformPose('/base_link', pose_msg)
-  
-        #call handle_odometry
-        if self.last_odometry:
-            self.pf.handle_odometry(self.odometry, self.last_odometry)
-        self.last_odometry = self.odometry
-        """
         self.odometry = msg
+        #prediction
         if self.last_odometry:
             self.pf.handle_odometry(self.odometry, self.last_odometry)
         self.last_odometry = self.odometry
+
+    def broadcast_frame_transformation(self):
+        # get most likely robot pose from particle filter
+            x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
+            
+            # get pose from odometry
+            x_Odometry = self.odometry.pose.pose.position.x
+            y_Odometry = self.odometry.pose.pose.position.y
+            _, _, yaw_Odometry = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.w, self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z])
+            
+            #calculate diff in pose
+
+            """
+            TODO: is the diff calculated in the right way or the other way round?
+            """
+            x_diff = x_Particle_Filter-x_Odometry
+            y_diff = y_Particle_Filter-y_Odometry
+            yaw_diff = yaw_Particle_Filter-yaw_Odometry
+            q = transform.quaternion_from_euler(0,0,yaw_diff)
+            
+            broadcast_msg = TransformStamped()
+            broadcast_msg.header.stamp = rospy.Time.now()
+            broadcast_msg.header.frame_id = "map"
+            broadcast_msg.child_frame_id = "odom"
+            broadcast_msg.transform.translation.x = x_diff
+            broadcast_msg.transform.translation.y = y_diff
+            broadcast_msg.transform.translation.z = 0.0
+            broadcast_msg.transform.rotation.x = q[0]
+            broadcast_msg.transform.rotation.y = q[1]
+            broadcast_msg.transform.rotation.z = q[2]
+            broadcast_msg.transform.rotation.w = q[3]
+            #self.br.sendTransform(broadcast_msg)
 
     def run(self):
         rate = rospy.Rate(20)
         while not rospy.is_shutdown():
+            if self.odometry != None:
+                self.broadcast_frame_transformation()
             rate.sleep()
     
-
-
 if __name__ == '__main__':
     num_particles = 50
     mcl = MonteCarloLocalization(num_particles)
