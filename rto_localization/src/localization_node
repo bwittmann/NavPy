@@ -33,10 +33,13 @@ class ParticleFilter(object):
                  dynamics_orientation_noise_std_dev,
                  beam_range_measurement_noise_std_dev):
 
-
+        #Particle Filter variables
         self.num_particles = num_particles
+        self.eval_beams = eval_beams
+        self.particles = []
+        self.weights = [1]*self.num_particles
 
-        # call a cell in self.ogm by self.ogm[x,y]
+        # Occupancy grid map (self.ogm[x,y])
         self.ogm = occ_grid_map
         self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.width, occ_grid_map.map.info.height))
         
@@ -45,6 +48,7 @@ class ParticleFilter(object):
         TODO: check if x = width and y = height
 
         """
+        # Occupancy Grid map parameter
         self.xmin = 0
         self.xmax = occ_grid_map.map.info.height-1
         self.ymin = 0
@@ -58,27 +62,15 @@ class ParticleFilter(object):
         self.laser_min_range = laser_min_range
         self.subsampled_angles = subsampled_angles
 
-
         # Relative motion since the last time particles were updated
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
 
-        # Std deviation of noise affecting translation in the dynamics model for particles
+        # uncertainty for dynamic and sensormodel
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
-
-        # Std deviation of noise affecting orientation in the dynamics model for particles
         self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
-
-        # Std deviation of noise affecting measured range from the laser measurement model
         self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
-
-        # Number of laser beams used during the measurement update
-        self.eval_beams = eval_beams
-
-        # list of particles and corresponding weights of length num_particles
-        self.particles = []
-        self.weights = [1]*self.num_particles
 
     def coordinates_to_map(self ,x_grid , y_grid, yaw_grid):
 
@@ -134,7 +126,7 @@ class ParticleFilter(object):
             self.particles.append(particle)
 
 
-    def handle_observation(self, laser_scan_msg, dt):
+    def handle_observation(self, laser_scan_msg):
         """
         prediction and measurement update is started
         """
@@ -271,7 +263,7 @@ class ParticleFilter(object):
         last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
         orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
         last_orientation = np.array([last_odom.pose.pose.orientation.x, last_odom.pose.pose.orientation.y, last_odom.pose.pose.orientation.z, last_odom.pose.pose.orientation.w])
-        
+        #rospy.loginfo(transform.euler_from_quaternion(orientation)[2])
         # multiplying current orientation with inverse previous orientation returns orientation difference in quternion form of orientation
         diff_orientation_quaternion = transform.quaternion_multiply(transform.quaternion_inverse(last_orientation), orientation)
 
@@ -288,21 +280,16 @@ class ParticleFilter(object):
         """
         predicts particle according to odometry
         """
-
-        uncertainty_translation = np.random.normal(0, self.dynamics_translation_noise_std_dev)
-        uncertainty_orientation = np.random.normal(0, self.dynamics_orientation_noise_std_dev)
-
-        # relative motion with uncertainty
-        dx = self.dx + uncertainty_translation
-        dy = self.dy + uncertainty_translation
-        dyaw = self.dyaw + uncertainty_orientation
-
+        """
+        TODO: change cooridnates of particles to continous in order to really store the odometry otherwise it is deleted again when going back to grid cell
+        """
         # transform position of particle to position in continous space, add relative motion and transform position of particle back to ogm cell
         particle_x_continous, particle_y_continous= self.grid_to_continous(particle.x, particle.y)
-        particle_x_continous_update = particle_x_continous + dx
-        particle_y_continous_update = particle_y_continous + dy
+        particle_x_continous_update = particle_x_continous + self.dx
+        particle_y_continous_update = particle_y_continous + self.dy
         particle.x, particle.y = self.continous_to_grid(particle_x_continous_update, particle_y_continous_update)
-        particle.yaw = self.dyaw + uncertainty_orientation
+        particle.yaw = particle.yaw + self.dyaw
+        rospy.loginfo(particle.x)
 
     def get_position(self):
         max_index = np.argmax(self.weights)
@@ -317,7 +304,6 @@ class MonteCarloLocalization(object):
     #initializes object of MonteCarloLocalization and sets all parameters
     def __init__(self, num_particles):
 
-        #initialize ros node
         rospy.init_node('monte_carlo_localization')
 
         #load map from map_loader_node
@@ -328,8 +314,7 @@ class MonteCarloLocalization(object):
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
     
-        # set variables
-        self.last_laser_scan = None
+        # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
         self.eval_beams = 32
@@ -367,24 +352,19 @@ class MonteCarloLocalization(object):
 
         # set subsampled laserscans
         """
-        TODO: angle_min = -2.0*pi and angle_max = 2.0*pi is dangerous angle_max-angle_min = 4.0 pi = 720 degree
+        TODO: check if angles are equivalent in scan topic from -pi to pi
         """
-        subsampled_angles = np.linspace(0, msg.angle_max, self.eval_beams)
+        subsampled_angles = np.linspace(msg.angle_min, msg.angle_max, self.eval_beams)
         self.pf.subsampled_angles = subsampled_angles
-        
 
-        # measurement update
-        if self.last_laser_scan:
-            #header.stamp creates a timestamp where it concatinates secs and nsecs. dt is a nsecs value
-            dt = msg.header.stamp - self.last_laser_scan.header.stamp
-            self.pf.handle_observation(msg,dt)
-
-        self.last_laser_scan = msg
+        #measurement update
+        self.pf.handle_observation(msg)
 
     def odometry_callback(self, msg):
         self.odometry = msg
-        #prediction
+
         if self.last_odometry:
+            #prediction
             self.pf.handle_odometry(self.odometry, self.last_odometry)
         self.last_odometry = self.odometry
 
