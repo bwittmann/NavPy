@@ -13,7 +13,8 @@ from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
 
-# TODO: Increase performance of _padd_static_map()
+# TODO: Increase performance of _padd_static_map() -> constructing mask takes most of the time
+#       worse performance: np.greater()
 # TODO: Think about use of threads again.
 # TODO: Do we need a mutex for a service call?
 # TODO: Add service for changing global costmap? Static?
@@ -71,7 +72,9 @@ class CostmapGenerator():
         self.padded_val = rospy.get_param('~global_costmap')['padded_val']
         self.decay_type = rospy.get_param('~global_costmap')['decay_type']
         self.soft_padding = rospy.get_param('~global_costmap')['decay_distance']    # Unit: m
+        self.apply_soft_padding = rospy.get_param('~global_costmap')['apply_soft_padding']
         self.log_times = rospy.get_param('~log_times')
+    
 
         # Init publisher 
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
@@ -129,7 +132,7 @@ class CostmapGenerator():
         rospy.Service('switch_maps', SwitchMaps, self._handle_switch_maps)
         rospy.spin()
         
-    # TODO: apply padding?
+
     def _handle_switch_maps(self, req):
         """
         Handler method for the service 'switch_maps', which changes the map used for costmap
@@ -153,7 +156,7 @@ class CostmapGenerator():
     @timed
     def _padd_static_map(self):
         """
-        private method that applies hard and soft padding to the static map.
+        Private method that applies hard and soft padding to the static map.
         """
         global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
 
@@ -172,14 +175,15 @@ class CostmapGenerator():
             mask_hard_padding = grid[1]*grid[1] + grid[0]*grid[0] <= self.hard_padding * self.hard_padding
             global_costmap[mask_hard_padding] = self.padded_val
             
-            # Apply 'soft padding' for each step in the decay of the cost
-            for idx, val in enumerate(self.soft_padding, start=1):
-                masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
-                    & (global_costmap < val) & (global_costmap > -1) # delete last statement to inc. performance
-                global_costmap[masks_soft_padding] = val
-
+            if self.apply_soft_padding == True:
+                # Apply 'soft padding' for each step in the decay of the cost
+                for idx, val in enumerate(self.soft_padding, start=1):
+                    masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
+                        & (global_costmap < val) & (global_costmap > -1) # delete last statement to inc. performance
+                    global_costmap[masks_soft_padding] = val
+            
         # Uncomment for testing and to receive an image of the global_costmap
-        #cv2.imwrite('map_padded_comp4.jpg', global_costmap.astype(np.uint8))
+        #cv2.imwrite('map_padded_comp.jpg', global_costmap.astype(np.uint8))
         #print(np.unique(global_costmap))
 
         self.static_map.data = global_costmap.ravel()
