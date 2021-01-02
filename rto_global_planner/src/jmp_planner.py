@@ -10,16 +10,9 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
-#TODO:make it can publish command to cmd_vel
-#TODO:fit to different maps
-#TODO:speed up search
-#TODO:consider the point is valid but cannot be reached
-#TODO:add threading
-#TODO:use initial position from amcl node
-
 class Node():
     """
-    A node class for A* Pathfinding
+    A node class for Pathfinding
     @parameter parent: parent node
     @parameter position: position on map
     @parameter g: cost from start position to current position
@@ -38,9 +31,9 @@ class Node():
     def __eq__(self, other):
         return self.position == other.position
 
-class Astar_Planner():
+class Jps_Planner():
     """
-    Independent Astar_Planner function class
+    Independent Jps_Planner function class
     """
 
     def getMinNode(self):
@@ -83,51 +76,47 @@ class Astar_Planner():
                 return node
         return None
 
-    def search(self, minF, offsetX, offsetY):
+    def getg(self, node):
+        """
+        @return: g value of node
+        """
+        dx = abs(node.parent.position[0] - node.position[0])
+        dy = abs(node.parent.position[0] - node.position[0])
+        return node.parent.g + np.sqrt(dx * dx + dy * dy)
+
+    def geth(self, node):
+        """
+        @return: h value of node
+        """
+        dx = abs(node.position[0] - self.endnode.position[0])
+        dy = abs(node.position[1] - self.endnode.position[1])
+        # closed-form distance
+        # node.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node.position[0]][node.position[1]] * 0.5
+        # euclidean distance
+        node.h =  dx + dy + self.map[node.position[0]][node.position[1]] * 0.5
+        # real distance
+        # node.h =  np.sqrt(dx * dx + dy * dy) + self.map[node.position[0]][node.position[1]] * 0.5
+        return node.h
+
+    def prune_neighbours(self, node):
+        """
+        docstring
+        """
+        pass
+
+    def jump_node(self, now, pre):
+        """
+        docstring
+        """
+        pass
+
+    def extend_node(self, minF):
         """
         search action for next step and add this node to openlist
         """
+        pass
 
-        node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
-
-        # if the offset is out of boundary
-        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
-            return
-
-        # if the offset is valid
-        # elif self.map[int(node_pos[0])][int(node_pos[1])] != 0:
-        #     return
-
-        # if the node is in closed set, then pass
-        elif self.pointInCloseList(node_pos):
-            return
-
-        else:
-            # if it is not in openlist, add it to openlist
-            currentNode = self.pointInOpenList(node_pos)
-            if not currentNode:
-                currentNode = Node(minF, node_pos)
-                currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
-                dx = abs(node_pos[0] - self.endnode.position[0])
-                dy = abs(node_pos[1] - self.endnode.position[1])
-                # closed-form distance
-                # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
-                # euclidean distance
-                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.5
-                # real distance
-                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
-                currentNode.f = currentNode.g + currentNode.h
-                self.open_list.append(currentNode)
-                return
-            # if it is in openlist, determine if g of currentnode is smaller
-            else:
-                action_cost = np.sqrt(offsetX * offsetX + offsetY * offsetY)
-                if minF.g + action_cost < currentNode.g:
-                    currentNode.g = minF.g + action_cost
-                    currentNode.parent = minF
-                    return
-
-    def astar(self, gridmap, map_width, map_height, start, end):
+    def jps(self, gridmap, map_width, map_height, start, end):
         """
         main function of astar search
 
@@ -157,15 +146,8 @@ class Astar_Planner():
             self.closed_list.append(minF)
             self.open_list.remove(minF)
 
-            # apply search to add node for next step in 8 directions
-            self.search(minF, 0, 1)
-            self.search(minF, 1, 0)
-            self.search(minF, 0, -1)
-            self.search(minF, -1, 0)
-            self.search(minF, 1, 1)
-            self.search(minF, 1, -1)
-            self.search(minF, -1, 1)
-            self.search(minF, -1, -1)
+            # apply search to add node for next step
+            self.extend_node(minF)
 
             # determine if it the endpoint
             endnode = self.endPointInCloseList()
@@ -246,7 +228,7 @@ class main():
         """
         check the validility of goal
         """
-        if goalx > self.map_width - 1 or goaly > self.map_height - 1:
+        if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             rospy.logwarn('Goal is out of boundary')
             return None
         elif self.map[int(goalx)][int(goaly)] < 90:
@@ -254,14 +236,14 @@ class main():
         else:
             return None
 
-    # run astar node
+    # run jmp node
     def run(self, rate: float = 1):
 
         while not rospy.is_shutdown():
 
             # wait for goal input to start global planner
             rospy.wait_for_message('/move_base_simple/goal', PoseStamped)
-            global_planner = Astar_Planner()
+            jps_planner = Jps_Planner()
 
             # initialize start node
             #TODO:replace initial position using amcl
@@ -272,7 +254,7 @@ class main():
             if self.check_valid(self.goal_x, self.goal_y):
 
                 end = (int(self.goal_x), int(self.goal_y))
-                path = global_planner.astar(self.map, self.map_width, self.map_height, start, end)
+                path = jps_planner.jps(self.map, self.map_width, self.map_height, start, end)
 
                 # publish path
                 for pa in path:
