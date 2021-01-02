@@ -106,13 +106,15 @@ class ParticleFilter(object):
         """
 
         while True:
-            x = np.random.randint(self.xmin, self.xmax)
-            y = np.random.randint(self.ymin, self.ymax)
+            x = np.random.randint(self.xmin, self.xmax*self.resolution)
+            y = np.random.randint(self.ymin, self.ymax*self.resolution)
 
-            if self.ogm_map[x,y] != 100:
+            x_grid, y_grid = self.continous_to_grid(x,y)
+
+            if self.ogm_map[x_grid, y_grid] != 100:
                 break
 
-        yaw = np.random.uniform(0,2*pi)
+        yaw = np.random.uniform(-pi,pi)
         return x, y, yaw
 
     def init_particles(self):
@@ -186,9 +188,8 @@ class ParticleFilter(object):
                 """
                 TODO: check if transformation between grid position and continous position
                 """
-                x_continous, y_continous = self.grid_to_continous(x,y)
-                x_scan = x_continous + cos(angle)*distance
-                y_scan = y_continous + sin(angle)*distance
+                x_scan = x + cos(angle)*distance
+                y_scan = y + sin(angle)*distance
                 x_grid, y_grid = self.continous_to_grid(x_scan, y_scan)
                 
                 """
@@ -235,7 +236,8 @@ class ParticleFilter(object):
         2) position of robot is in free space
         """
         # high error for particles outside of ogm or within an obstacle
-        if particle.x < self.xmin or particle.x > self.xmax or particle.x < self.ymin or particle.y > self.ymax or (self.ogm_map[particle.x, particle.y] == 100):
+        x_grid, y_grid = self.continous_to_grid(particle.x, particle.y)
+        if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax or (self.ogm_map[x_grid, y_grid] == 100):
             error = 300
             return error
 
@@ -263,7 +265,7 @@ class ParticleFilter(object):
         last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
         orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
         last_orientation = np.array([last_odom.pose.pose.orientation.x, last_odom.pose.pose.orientation.y, last_odom.pose.pose.orientation.z, last_odom.pose.pose.orientation.w])
-        #rospy.loginfo(transform.euler_from_quaternion(orientation)[2])
+   
         # multiplying current orientation with inverse previous orientation returns orientation difference in quternion form of orientation
         diff_orientation_quaternion = transform.quaternion_multiply(transform.quaternion_inverse(last_orientation), orientation)
 
@@ -284,12 +286,16 @@ class ParticleFilter(object):
         TODO: change cooridnates of particles to continous in order to really store the odometry otherwise it is deleted again when going back to grid cell
         """
         # transform position of particle to position in continous space, add relative motion and transform position of particle back to ogm cell
-        particle_x_continous, particle_y_continous= self.grid_to_continous(particle.x, particle.y)
-        particle_x_continous_update = particle_x_continous + self.dx
-        particle_y_continous_update = particle_y_continous + self.dy
-        particle.x, particle.y = self.continous_to_grid(particle_x_continous_update, particle_y_continous_update)
-        particle.yaw = particle.yaw + self.dyaw
-        rospy.loginfo(particle.x)
+        particle.x = particle.x + self.dx
+        particle.y = particle.y + self.dy
+        if particle.yaw + self.dyaw > pi:
+            particle.yaw = -pi + self.dyaw
+        elif particle.yaw + self.dyaw < -pi:
+            particle.yaw = pi + self.dyaw
+        else:
+            particle.yaw += self.dyaw
+
+        rospy.loginfo(particle.yaw)
 
     def get_position(self):
         max_index = np.argmax(self.weights)
