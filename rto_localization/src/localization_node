@@ -140,6 +140,11 @@ class ParticleFilter(object):
             error = self.get_prediction_error(laser_scan_msg, particle)
             weights_not_normalized.append(exp(-error))
         
+        #set relative motion by odometry to zero after prediction
+        self.dx = 0
+        self.dy = 0
+        self.dyaw = 0
+        
         self.weights = [i/sum(weights_not_normalized) for i in weights_not_normalized]
         self.resample()
 
@@ -165,7 +170,7 @@ class ParticleFilter(object):
                     index = 0
       
             particle = self.particles[index]
-            new_particle = Particle(particle.id, particle.x, particle.y, particle.yaw)
+            new_particle = Particle(i, particle.x, particle.y, particle.yaw)
             new_particles.append(new_particle)
         
         self.particles = new_particles
@@ -268,24 +273,21 @@ class ParticleFilter(object):
    
         # multiplying current orientation with inverse previous orientation returns orientation difference in quternion form of orientation
         diff_orientation_quaternion = transform.quaternion_multiply(transform.quaternion_inverse(last_orientation), orientation)
-
         # transform quatermion form of ortientation to euler form of orientation (roll, pitch, yaw)
         _, _, yaw_diff = transform.euler_from_quaternion(diff_orientation_quaternion)
 
         diff_position = position-last_position
 
-        self.dx = diff_position[0]
-        self.dy = diff_position[1]
-        self.dyaw = yaw_diff
+        #add relative motion by odometry until it is used to predict the particles
+        self.dx += diff_position[0]
+        self.dy += diff_position[1]
+        self.dyaw += yaw_diff
 
     def predict_odometry(self, particle):
         """
         predicts particle according to odometry
         """
-        """
-        TODO: change cooridnates of particles to continous in order to really store the odometry otherwise it is deleted again when going back to grid cell
-        """
-        # transform position of particle to position in continous space, add relative motion and transform position of particle back to ogm cell
+
         particle.x = particle.x + self.dx
         particle.y = particle.y + self.dy
         if particle.yaw + self.dyaw > pi:
@@ -294,8 +296,6 @@ class ParticleFilter(object):
             particle.yaw = pi + self.dyaw
         else:
             particle.yaw += self.dyaw
-
-        rospy.loginfo(particle.yaw)
 
     def get_position(self):
         max_index = np.argmax(self.weights)
@@ -311,6 +311,8 @@ class MonteCarloLocalization(object):
     def __init__(self, num_particles):
 
         rospy.init_node('monte_carlo_localization')
+
+        self.lock = Lock()
 
         #load map from map_loader_node
         rospy.wait_for_service('get_map')
@@ -349,7 +351,6 @@ class MonteCarloLocalization(object):
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
 
     def laser_scan_callback (self, msg):
-
         # set min and max range, angle of laser
         self.pf.laser_min_angle = msg.angle_min
         self.pf.laser_max_angle = msg.angle_max
@@ -364,14 +365,18 @@ class MonteCarloLocalization(object):
         self.pf.subsampled_angles = subsampled_angles
 
         #measurement update
+        self.lock.acquire()
         self.pf.handle_observation(msg)
+        self.lock.release()
 
     def odometry_callback(self, msg):
         self.odometry = msg
 
         if self.last_odometry:
             #prediction
+            self.lock.acquire()
             self.pf.handle_odometry(self.odometry, self.last_odometry)
+            self.lock.release()
         self.last_odometry = self.odometry
 
     def broadcast_frame_transformation(self):
@@ -414,7 +419,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 50
+    num_particles = 5
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
