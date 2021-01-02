@@ -10,7 +10,6 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
-#TODO:fit it to different maps
 #TODO:make it can publish command to cmd_vel
 #TODO:fit to different maps
 #TODO:speed up search
@@ -181,8 +180,8 @@ class main():
 
         # Initialize Subscribers
         # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
-        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
-        # self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
+        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -215,7 +214,7 @@ class main():
     #     """
     #     self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x + 3.246519) / 0.05)
     #     self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y + 3.028618) / 0.05)
-        # print(PoseWithCovarianceStamped.pose.pose.position)
+    #     print(PoseWithCovarianceStamped.pose.pose.position)
 
     def callback_costmap(self, OccupancyGrid):
         """
@@ -226,15 +225,15 @@ class main():
         self.map_height = OccupancyGrid.info.height
         self.map = self.map_input.reshape(self.map_height, self.map_width) # shape of 169(width)*116(height)
         self.map = np.transpose(self.map)
+        self.origin = OccupancyGrid.info.origin.position
 
     def callback_goal(self, PoseStamped):
         """
         callback of goal
         """
-        #TODO:replace parameter here according to map parameter
         # shift position to position in map
-        self.goal_x = int((PoseStamped.pose.position.x + 3.246519) / 0.05)
-        self.goal_y = int((PoseStamped.pose.position.y + 3.028618) / 0.05)
+        self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / 0.05)
+        self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / 0.05)
 
     def check_valid(self, goalx, goaly):
         """
@@ -258,9 +257,9 @@ class main():
             global_planner = Astar_Planner()
 
             # initialize start node
-            # start = (self.pos_x, self.pos_y)
-            self.pos_x = int((0.09035 + 3.246519) / 0.05)
-            self.pos_y = int((0.01150 + 3.028618) / 0.05)
+            #TODO:replace initial position using amcl
+            self.pos_x = int((0.09035 - self.origin.x) / 0.05)
+            self.pos_y = int((0.01150 - self.origin.y) / 0.05)
             start = (self.pos_x, self.pos_y)
 
             if self.check_valid(self.goal_x, self.goal_y):
@@ -280,7 +279,7 @@ class main():
 
                 # publish plan
                 for p in path:
-                    self.msg_path_marker.points.append(Point(p[0]*0.05 - 3.246519, p[1]*0.05 - 3.028618, 0))
+                    self.msg_path_marker.points.append(Point(p[0]*0.05 + self.origin.x, p[1]*0.05 + self.origin.y, 0))
                 self.pub_plan.publish(self.msg_path_marker)
                 self.msg_path_marker.points.clear()
 

@@ -26,7 +26,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: LaserScan
+    SyncSource: Image
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -152,7 +152,7 @@ Visualization Manager:
           Draw Behind: false
           Enabled: true
           Name: Costmap_Global
-          Topic: /move_base/global_costmap/costmap
+          Topic: /global_costmap
           Unreliable: false
           Use Timestamp: false
           Value: true
@@ -396,7 +396,7 @@ Visualization Manager:
       Marker Topic: /visualization/plan
       Name: Global_path
       Namespaces:
-        navigation: true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true
