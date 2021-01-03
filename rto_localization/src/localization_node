@@ -183,7 +183,7 @@ class ParticleFilter(object):
 
         particle_ranges = []
         step = self.ogm.map.info.resolution
-
+        
         for i in self.subsampled_angles:
             angle = i+yaw
             distance = self.laser_min_range
@@ -213,6 +213,7 @@ class ParticleFilter(object):
 
             if check_if_obstacle_is_sensed == 0:
                 particle_ranges.append(self.laser_max_range)
+
         return particle_ranges
 
 
@@ -220,19 +221,18 @@ class ParticleFilter(object):
         """
         subsample number of beams from output of laser and set inf to laser_max_range
         """
-        
-        subsample_rate = len(laser_scan_msg.ranges)/self.eval_beams
         subsampled_ranges = []
-
-        #pick eval_beams equally distributed in laser_range
+        subsampled_angles_index = np.linspace(0, len(laser_scan_msg.ranges)-1, self.eval_beams).astype(int)
+        
         for i in range(self.eval_beams):
-            # check if laser_range = inf
-            if laser_scan_msg.ranges[int(i*subsample_rate)] == inf:
+            if laser_scan_msg.ranges[subsampled_angles_index[i]] == inf:
                 subsampled_ranges.append(self.laser_max_range)
             else:
-                subsampled_ranges.append(laser_scan_msg.ranges[int(i*subsample_rate)])
+                subsampled_ranges.append(laser_scan_msg.ranges[subsampled_angles_index[i]])
 
         return subsampled_ranges
+
+        
 
     def get_prediction_error(self, laser_scan_msg, particle):
         """
