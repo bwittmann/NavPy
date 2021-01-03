@@ -98,13 +98,13 @@ class Jps_Planner():
         # node.h =  np.sqrt(dx * dx + dy * dy) + self.map[node.position[0]][node.position[1]] * 0.5
         return node.h
 
-    def prune_neighbours(self, node):
+    def diagonal(self, node, direction):
         """
         docstring
         """
         pass
 
-    def jump_node(self, now, pre):
+    def cardinal(self, node, direction):
         """
         docstring
         """

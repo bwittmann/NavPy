@@ -21,7 +21,8 @@
     <!-- <include file="$(find amcl)/examples/amcl_omni.launch" /> -->
 
     <!-- Run global planner -->
-    <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner.py" output="screen"/>
+    <!-- <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner.py" output="screen"/> -->
+    <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
 
     <!-- Run move_base -->
     <!-- <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
