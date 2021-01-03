@@ -38,52 +38,52 @@ class Node():
     def __eq__(self, other):
         return self.position == other.position
 
-class Astar_Planner():
+class Bidirectional_Astar_Planner():
     """
     Independent Astar_Planner function class
     """
 
-    def getMinNode(self):
+    def getMinNode(self, input_list):
         """
         try to find the node with minimal f in openlist
 
         @return: the node with minimal f value
         """
-        currentNode = self.open_list[0]
-        for node in self.open_list:
+        currentNode = input_list[0]
+        for node in input_list:
             # if node.g + node.h < currentNode.g + currentNode.h:
             if node.f < currentNode.f:
                 currentNode = node
         return currentNode
 
-    def pointInCloseList(self, position):
+    def pointInCloseList(self, position, closed_list):
         """
         determine if a position is in closelist
         """
-        for node in self.closed_list:
+        for node in closed_list:
             if node.position == position:
                 return True
         return False
 
-    def pointInOpenList(self, position):
+    def pointInOpenList(self, position, open_list):
         """
         determine if a position is in openlist
         """
-        for node in self.open_list:
+        for node in open_list:
             if node.position == position:
                 return node
         return None
 
-    def endPointInCloseList(self):
+    def check_intersection(self, pos, open_end):
         """
-        determine if goal is already in closelist
+        find intersection part of two openlist
         """
-        for node in self.closed_list:
-            if node.position == self.endnode.position:
-                return node
+        intersect = self.pointInOpenList(pos, open_end)
+        if intersect:
+            return intersect
         return None
 
-    def search(self, minF, offsetX, offsetY):
+    def search_start(self, minF, offsetX, offsetY):
         """
         search action for next step and add this node to openlist
         """
@@ -94,30 +94,82 @@ class Astar_Planner():
         if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
             return
 
-        # if the offset is valid
-        # elif self.map[int(node_pos[0])][int(node_pos[1])] != 0:
-        #     return
+        # if the node is in closed set, then pass
+        elif self.pointInCloseList(node_pos, self.closed_list_start):
+            return
+
+        else:
+            self.intersect = self.check_intersection(node_pos, self.open_list_end)
+            if self.intersect:
+                path = []
+                current = minF
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                path = path[::-1]
+                path.append(node_pos)
+                current = self.intersect
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                self.path = path
+                return
+            else:
+                # if it is not in openlist, add it to openlist
+                currentNode = self.pointInOpenList(node_pos, self.open_list_start)
+                if not currentNode:
+                    currentNode = Node(minF, node_pos)
+                    currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
+                    dx = abs(node_pos[0] - self.endnode.position[0])
+                    dy = abs(node_pos[1] - self.endnode.position[1])
+                    # closed-form distance
+                    # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
+                    # euclidean distance
+                    # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
+                    # real distance
+                    currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
+                    currentNode.f = currentNode.g + currentNode.h
+                    self.open_list_start.append(currentNode)
+                    return
+                # if it is in openlist, determine if g of currentnode is smaller
+                else:
+                    action_cost = np.sqrt(offsetX * offsetX + offsetY * offsetY)
+                    if minF.g + action_cost < currentNode.g:
+                        currentNode.g = minF.g + action_cost
+                        currentNode.parent = minF
+                        return
+
+    def search_end(self, minF, offsetX, offsetY):
+        """
+        search action for next step and add this node to openlist
+        """
+
+        node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
+
+        # if the offset is out of boundary
+        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
+            return
 
         # if the node is in closed set, then pass
-        elif self.pointInCloseList(node_pos):
+        elif self.pointInCloseList(node_pos, self.closed_list_end):
             return
 
         else:
             # if it is not in openlist, add it to openlist
-            currentNode = self.pointInOpenList(node_pos)
+            currentNode = self.pointInOpenList(node_pos, self.open_list_end)
             if not currentNode:
                 currentNode = Node(minF, node_pos)
                 currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
-                dx = abs(node_pos[0] - self.endnode.position[0])
-                dy = abs(node_pos[1] - self.endnode.position[1])
+                dx = abs(node_pos[0] - self.startnode.position[0])
+                dy = abs(node_pos[1] - self.startnode.position[1])
                 # closed-form distance
-                # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
+                # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
                 # euclidean distance
-                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.5
+                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
                 # real distance
-                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
+                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
-                self.open_list.append(currentNode)
+                self.open_list_end.append(currentNode)
                 return
             # if it is in openlist, determine if g of currentnode is smaller
             else:
@@ -127,7 +179,7 @@ class Astar_Planner():
                     currentNode.parent = minF
                     return
 
-    def astar(self, gridmap, map_width, map_height, start, end):
+    def bi_astar(self, gridmap, map_width, map_height, start, end):
         """
         main function of astar search
 
@@ -144,39 +196,56 @@ class Astar_Planner():
         self.map_height = map_height
 
         # Initialize open and closed list
-        self.open_list = [self.startnode] # store f of next possible step
-        self.closed_list = [] # store f of minimal path
+        self.open_list_start = [self.startnode] # store f of next possible step
+        self.closed_list_start = [] # store f of minimal path
+        self.open_list_end = [self.endnode]
+        self.closed_list_end = []
 
         # try to find the path with minimal cost
         while True:
+            self.intersect = []
+            self.path = []
 
             # find the node with minimal f in openlist
-            minF = self.getMinNode()
+            minF_start = self.getMinNode(self.open_list_start)
+            minF_end = self.getMinNode(self.open_list_end)
 
             # add this node to closed_list and delete this node from open_list
-            self.closed_list.append(minF)
-            self.open_list.remove(minF)
+            self.closed_list_start.append(minF_start)
+            self.open_list_start.remove(minF_start)
+            self.closed_list_end.append(minF_end)
+            self.open_list_end.remove(minF_end)
 
             # apply search to add node for next step in 8 directions
-            self.search(minF, 0, 1)
-            self.search(minF, 1, 0)
-            self.search(minF, 0, -1)
-            self.search(minF, -1, 0)
-            self.search(minF, 1, 1)
-            self.search(minF, 1, -1)
-            self.search(minF, -1, 1)
-            self.search(minF, -1, -1)
+            self.search_end(minF_end, 0, 1)
+            self.search_end(minF_end, 1, 0)
+            self.search_end(minF_end, 0, -1)
+            self.search_end(minF_end, -1, 0)
+            self.search_end(minF_end, 1, 1)
+            self.search_end(minF_end, 1, -1)
+            self.search_end(minF_end, -1, 1)
+            self.search_end(minF_end, -1, -1)
 
-            # determine if it the endpoint
-            endnode = self.endPointInCloseList()
-            # if it is endnode, then return a path
-            if endnode:
-                path = []
-                current = endnode
-                while current is not None:
-                    path.append(current.position)
-                    current = current.parent
-                return path[::-1]
+            self.search_start(minF_start, 0, 1)
+            if not self.intersect:
+                self.search_start(minF_start, 1, 0)
+            if not self.intersect:
+                self.search_start(minF_start, 0, -1)
+            if not self.intersect:
+                self.search_start(minF_start, -1, 0)
+            if not self.intersect:
+                self.search_start(minF_start, 1, 1)
+            if not self.intersect:
+                self.search_start(minF_start, 1, -1)
+            if not self.intersect:
+                self.search_start(minF_start, -1, 1)
+            if not self.intersect:
+                self.search_start(minF_start, -1, -1)
+
+            # if it is intersection node, then return a path
+            if self.intersect:
+                print(f'path lenth is:{len(self.path)}')
+                return self.path
 
 class main():
     """
@@ -187,8 +256,8 @@ class main():
 
         # Initialize Subscribers
         # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
-        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
-        self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
+        # self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -241,6 +310,8 @@ class main():
         # shift position to position in map
         self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / 0.05)
         self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / 0.05)
+        # self.goal_x = int((PoseStamped.pose.position.x + 3.246519) / 0.05)
+        # self.goal_y = int((PoseStamped.pose.position.y + 3.028618) / 0.05)
 
     def check_valid(self, goalx, goaly):
         """
@@ -261,18 +332,20 @@ class main():
 
             # wait for goal input to start global planner
             rospy.wait_for_message('/move_base_simple/goal', PoseStamped)
-            global_planner = Astar_Planner()
+            global_planner = Bidirectional_Astar_Planner()
 
             # initialize start node
             #TODO:replace initial position using amcl
             self.pos_x = int((0.09035 - self.origin.x) / 0.05)
             self.pos_y = int((0.01150 - self.origin.y) / 0.05)
+            # self.pos_x = int((0.09035 + 3.246519) / 0.05)
+            # self.pos_y = int((0.01150 + 3.028618) / 0.05)
             start = (self.pos_x, self.pos_y)
 
             if self.check_valid(self.goal_x, self.goal_y):
 
                 end = (int(self.goal_x), int(self.goal_y))
-                path = global_planner.astar(self.map, self.map_width, self.map_height, start, end)
+                path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
                 # publish path
                 for pa in path:
