@@ -139,6 +139,7 @@ class ParticleFilter(object):
             self.predict_odometry(particle)
             error = self.get_prediction_error(laser_scan_msg, particle)
             weights_not_normalized.append(exp(-error))
+            particle_plot = [particle.id, particle.x, particle.y, particle.yaw]
         
         #set relative motion by odometry to zero after prediction
         self.dx = 0
@@ -178,18 +179,21 @@ class ParticleFilter(object):
 
     def get_laser_scan_for_particle(self, x, y, yaw):
         """
-        simulate what a the robot would sense with laser if it is located in particle pose (x,y,yaw)
+        simulate what a the robot would sense with laser if it is located in particle pose (x,y,yaw):
+            take x, y, yaw pose of robot and sense the surrounding in the directions of subsampled angles
+            start at minimal distance laser_min_range and stop at distance laser_max_range
+            incrementally go trough all angles and distances and check if there is an obstacle or edge of map
+            This simulates what the robot would sense in the directions of subsampled angles if it is in the pose of the particle
         """
 
         particle_ranges = []
         step = self.ogm.map.info.resolution
-        
+
         for i in self.subsampled_angles:
             angle = i+yaw
             distance = self.laser_min_range
             check_if_obstacle_is_sensed = 0
-
-            while distance < self.laser_max_range:
+            while distance <= self.laser_max_range:
                 """
                 TODO: check if transformation between grid position and continous position
                 """
@@ -219,7 +223,10 @@ class ParticleFilter(object):
 
     def subsample_laser_scan(self, laser_scan_msg):
         """
-        subsample number of beams from output of laser and set inf to laser_max_range
+        subsample number of beams from output of laser and set inf to laser_max_range:
+            going through the laser_scan_ranges anti-clockwise (index 0 is right behind robot index 245 is left behind robot)
+            from all scans just pick the scans in the direction of subsampled angles (eval_beams number of angles with equal distance to each other)
+        
         """
         subsampled_ranges = []
         subsampled_angles_index = np.linspace(0, len(laser_scan_msg.ranges)-1, self.eval_beams).astype(int)
@@ -240,6 +247,7 @@ class ParticleFilter(object):
         1) diff in robot scan and particle scan 
         2) position of robot is in free space
         """
+        
         # high error for particles outside of ogm or within an obstacle
         x_grid, y_grid = self.continous_to_grid(particle.x, particle.y)
         if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax or (self.ogm_map[x_grid, y_grid] == 100):
@@ -271,11 +279,12 @@ class ParticleFilter(object):
         orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
         last_orientation = np.array([last_odom.pose.pose.orientation.x, last_odom.pose.pose.orientation.y, last_odom.pose.pose.orientation.z, last_odom.pose.pose.orientation.w])
    
-        # multiplying current orientation with inverse previous orientation returns orientation difference in quternion form of orientation
+        # DIFF YAW: multiplying current orientation with inverse previous orientation and transform quanternion form to euler form of orientation
+        #clockwise rotation is negative and anti-clockwise rotation is positive
         diff_orientation_quaternion = transform.quaternion_multiply(transform.quaternion_inverse(last_orientation), orientation)
-        # transform quatermion form of ortientation to euler form of orientation (roll, pitch, yaw)
         _, _, yaw_diff = transform.euler_from_quaternion(diff_orientation_quaternion)
 
+        # DIFF POS
         diff_position = position-last_position
 
         #add relative motion by odometry until it is used to predict the particles
@@ -288,14 +297,20 @@ class ParticleFilter(object):
         predicts particle according to odometry
         """
 
-        particle.x = particle.x + self.dx
-        particle.y = particle.y + self.dy
-        if particle.yaw + self.dyaw > pi:
-            particle.yaw = -pi + self.dyaw
-        elif particle.yaw + self.dyaw < -pi:
-            particle.yaw = pi + self.dyaw
+        # predict each particle with a given uncertainty to create a set of particles during the resampling which does not contain dublicates 
+        nx = random.gauss(0, self.dynamics_translation_noise_std_dev)
+        ny = random.gauss(0, self.dynamics_translation_noise_std_dev)
+        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev)
+
+        particle.x = particle.x + self.dx + nx
+        particle.y = particle.y + self.dy + ny
+
+        if particle.yaw + self.dyaw + nyaw > pi:
+            particle.yaw = -pi + self.dyaw + nyaw
+        elif particle.yaw + self.dyaw + nyaw< -pi:
+            particle.yaw = pi + self.dyaw + nyaw
         else:
-            particle.yaw += self.dyaw
+            particle.yaw += self.dyaw + nyaw
 
     def get_position(self):
         max_index = np.argmax(self.weights)
@@ -361,6 +376,7 @@ class MonteCarloLocalization(object):
         """
         TODO: check if angles are equivalent in scan topic from -pi to pi
         """
+        #angles from start_angle of laser_scan (-2) to end_angle of laser_scan (2)
         subsampled_angles = np.linspace(msg.angle_min, msg.angle_max, self.eval_beams)
         self.pf.subsampled_angles = subsampled_angles
 
