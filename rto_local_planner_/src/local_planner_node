@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import time
+
+from threading import Lock
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan 
+
+
+# tf
+
+class LocalPlanner():
+
+    def __init__(self):
+
+        # Init mutex
+        self.lock = Lock()
+
+        # Init subscriptions
+        rospy.Subscriber('/odom', Odometry, self._cb_odometry)
+        rospy.Subscriber('/global_path', Path, self._cb_global_path)
+        # local costmap or scan
+        #rospy.Subscriber('/odom', Odometry, cb)
+
+        # Init publisher
+        rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+
+        # Setup messages for publishing
+        self.twist = Twist()
+        self.twist.linear.z = 0
+        self.twist.angular.x = 0
+        self.twist.angular.y = 0
+
+
+    def _cb_odometry(self, msg):
+        self.lock.acquire()
+        self.odom = msg # filter out the relevant parts
+        self.lock.release()
+
+    def _cb_global_path(self, msg):
+        self.lock.acquire()
+        self.odom = msg # filter out the relevant parts
+        rospy.loginfo('Local planner reveived a global path')
+        self.lock.release()
+
+
+    def run(self):
+        while not rospy.is_shutdown():
+            print('running')
+            rospy.sleep(1)
+
+
+
+
+if __name__ == '__main__':
+
+    rospy.init_node('local_planner')
+
+    local_planner = LocalPlanner()
+    local_planner.run()
+
+
