@@ -6,11 +6,9 @@ import time
 
 from threading import Lock
 from nav_msgs.msg import Odometry, Path
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan 
 
-
-# tf
 
 class LocalPlanner():
 
@@ -29,8 +27,8 @@ class LocalPlanner():
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_odometry)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
+        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
         # local costmap or scan
-        #rospy.Subscriber('/odom', Odometry, cb)
 
         # Init publisher
         rospy.Publisher('/cmd_vel', Twist, queue_size=10)
@@ -41,6 +39,13 @@ class LocalPlanner():
         self.twist.angular.x = 0
         self.twist.angular.y = 0
 
+        # Init instance variables
+        self.current_pose = (0, 0, 0)
+
+    def _cb_current_pose(self, msg):
+        self.lock.acquire()
+        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)  #add jaw
+        self.lock.release()
 
     def _cb_odometry(self, msg):
         self.lock.acquire()
@@ -56,7 +61,7 @@ class LocalPlanner():
 
     def run(self):
         while not rospy.is_shutdown():
-            print('running')
+            print(self.current_pose)
             rospy.sleep(1)
 
 
