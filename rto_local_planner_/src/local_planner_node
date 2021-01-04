@@ -3,6 +3,7 @@
 import rospy
 import numpy as np
 import time
+import tf
 
 from threading import Lock
 from nav_msgs.msg import Odometry, Path
@@ -25,7 +26,7 @@ class LocalPlanner():
         self.num_samples = rospy.get_param('~num_samples')
 
         # Init subscriptions
-        rospy.Subscriber('/odom', Odometry, self._cb_odometry)
+        rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
         rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
         # local costmap or scan
@@ -41,28 +42,40 @@ class LocalPlanner():
 
         # Init instance variables
         self.current_pose = (0, 0, 0)
+        self.current_twist = (0, 0, 0)
+        self.global_path = []
 
     def _cb_current_pose(self, msg):
         self.lock.acquire()
-        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)  #add jaw
+        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
+            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
         self.lock.release()
 
-    def _cb_odometry(self, msg):
+    def _cb_current_twist(self, msg):
         self.lock.acquire()
-        self.odom = msg # filter out the relevant parts
+        self.current_twist = (msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z)
         self.lock.release()
 
     def _cb_global_path(self, msg):
         self.lock.acquire()
-        self.odom = msg # filter out the relevant parts
+        self.global_path.clear()
+        for pose in msg.poses:
+            self.global_path.append((pose.pose.position.x, pose.pose.position.y))
         rospy.loginfo('Local planner reveived a global path')
         self.lock.release()
 
 
-    def run(self):
+    def run(self, freq):
         while not rospy.is_shutdown():
-            print(self.current_pose)
-            rospy.sleep(1)
+
+            #rospy.wait_for_message('/amcl_pose', PoseWithCovarianceStamped)
+            #print('got msg')
+
+            rospy.sleep(1/freq)
+
+
 
 
 
@@ -72,6 +85,6 @@ if __name__ == '__main__':
     rospy.init_node('local_planner')
 
     local_planner = LocalPlanner()
-    local_planner.run()
+    local_planner.run(freq=1)
 
 

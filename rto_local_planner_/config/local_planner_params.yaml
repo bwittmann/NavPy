@@ -1,7 +1,8 @@
+
+# Min and max velocity values of the rto
 min_linear_vel: 0
 max_linear_vel: 1
-
 min_angular_vel: 0
-max_angular_vel: 1
+max_angular_vel: 0.3
 
 num_samples: 10
