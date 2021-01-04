@@ -19,6 +19,13 @@ class LocalPlanner():
         # Init mutex
         self.lock = Lock()
 
+        # Get params from parameter server
+        self.min_lin_vel = rospy.get_param('~min_linear_vel')
+        self.max_lin_vel = rospy.get_param('~max_linear_vel')
+        self.min_ang_vel = rospy.get_param('~min_angular_vel')
+        self.max_ang_vel = rospy.get_param('~max_angular_vel')
+        self.num_samples = rospy.get_param('~num_samples')
+
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_odometry)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
