@@ -250,7 +250,7 @@ class main():
         if goalx > self.map_width - 1 or goaly > self.map_height - 1:
             rospy.logwarn('Goal is out of boundary')
             return None
-        elif self.map[int(goalx)][int(goaly)] < 90:
+        elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] >= 0:
             return True
         else:
             return None

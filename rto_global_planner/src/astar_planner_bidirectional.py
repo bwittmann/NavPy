@@ -101,7 +101,7 @@ class Bidirectional_Astar_Planner():
         for node in open_start:
             append = self.pointInOpenList(node.position, open_end)
             if append:
-                self.intersect.append(append)
+                self.intersect.append(append.position)
         return self.intersect
 
     def search_start(self, minF, offsetX, offsetY):
@@ -205,11 +205,11 @@ class Bidirectional_Astar_Planner():
         self.closed_list_start = [] # store f of minimal path
         self.open_list_end = [self.endnode]
         self.closed_list_end = []
+        self.intersect = []
+        self.path = []
 
         # try to find the path with minimal cost
         while True:
-            self.intersect = []
-            self.path = []
 
             # find the node with minimal f in openlist
             minF_start = self.getMinNode(self.open_list_start)
@@ -242,26 +242,29 @@ class Bidirectional_Astar_Planner():
 
             self.intersect = self.check_intersection(self.open_list_start, self.open_list_end)
             if self.intersect:
-                print(self.intersect)
-                return
-                # path = []
-                # current = minF
-                # while current is not None:
-                #     path.append(current.position)
-                #     current = current.parent
-                # path = path[::-1]
-                # path.append(node_pos)
-                # current = self.intersect
-                # while current is not None:
-                #     path.append(current.position)
-                #     current = current.parent
-                # self.path = path
-                # return
+                # get the intersection position with minimal f value
+                minpos = self.intersect[0]
+                current_f = self.pointInOpenList(pos, self.open_list_start).f + self.pointInOpenList(pos, self.open_list_end)
+                for pos in self.intersect:
+                    f = self.pointInOpenList(pos, self.open_list_start).f + self.pointInOpenList(pos, self.open_list_end)
+                    if f < current_f:
+                        current_f = f
+                        minpos = pos
 
-            # if it is intersection node, then return a path
-            if self.intersect:
-                print(f'path lenth is:{len(self.path)}')
-                return self.path
+                #generate path
+                path = []
+                current = minpos
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                path = path[::-1]
+                path.append(node_pos)
+                current = self.intersect
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                self.path = path
+                return
 
 class main():
     """
