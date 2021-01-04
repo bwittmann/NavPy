@@ -256,8 +256,8 @@ class main():
 
         # Initialize Subscribers
         # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
-        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
-        # self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
+        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher

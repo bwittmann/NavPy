@@ -113,9 +113,9 @@ class Astar_Planner():
                 # closed-form distance
                 # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
                 # euclidean distance
-                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.5
+                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.5
                 # real distance
-                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
+                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
                 self.open_list.append(currentNode)
                 return
@@ -186,9 +186,9 @@ class main():
     def __init__(self):
 
         # Initialize Subscribers
-        # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
-        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
-        self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
+        # self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -215,13 +215,14 @@ class main():
         self.msg_path_marker.pose.orientation = Quaternion(0, 0, 0, 1)
 
     # Wait for amcl part to provide it with initial position
-    # def callback_pos(self, PoseWithCovarianceStamped):
-    #     """
-    #     callback of position
-    #     """
-    #     self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x + 3.246519) / 0.05)
-    #     self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y + 3.028618) / 0.05)
-    #     print(PoseWithCovarianceStamped.pose.pose.position)
+    def callback_pos(self, PoseWithCovarianceStamped):
+        """
+        callback of position
+        """
+        rospy.wait_for_message('/move_base/global_costmap/costmap', OccupancyGrid)
+        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / 0.05)
+        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / 0.05)
+        # print(PoseWithCovarianceStamped.pose.pose.position)
 
     def callback_costmap(self, OccupancyGrid):
         """
@@ -265,8 +266,8 @@ class main():
 
             # initialize start node
             #TODO:replace initial position using amcl
-            self.pos_x = int((0.09035 - self.origin.x) / 0.05)
-            self.pos_y = int((0.01150 - self.origin.y) / 0.05)
+            # self.pos_x = int((0.09035 - self.origin.x) / 0.05)
+            # self.pos_y = int((0.01150 - self.origin.y) / 0.05)
             start = (self.pos_x, self.pos_y)
 
             if self.check_valid(self.goal_x, self.goal_y):
