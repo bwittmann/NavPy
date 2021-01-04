@@ -111,9 +111,9 @@ class Astar_Planner():
                 dx = abs(node_pos[0] - self.endnode.position[0])
                 dy = abs(node_pos[1] - self.endnode.position[1])
                 # closed-form distance
-                # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]] * 0.5
+                # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
                 # euclidean distance
-                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.5
+                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
                 # real distance
                 currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
@@ -186,9 +186,9 @@ class main():
     def __init__(self):
 
         # Initialize Subscribers
-        self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
+        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
         self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
-        # self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -219,7 +219,7 @@ class main():
         """
         callback of position
         """
-        rospy.wait_for_message('/move_base/global_costmap/costmap', OccupancyGrid)
+        rospy.wait_for_message('/global_costmap', OccupancyGrid)
         self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / 0.05)
         self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / 0.05)
         # print(PoseWithCovarianceStamped.pose.pose.position)
