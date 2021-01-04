@@ -17,28 +17,7 @@ from visualization_msgs.msg import Marker
 #TODO:add threading
 #TODO:use initial position from amcl node
 
-class Node_end():
-    """
-    A node class for A* Pathfinding
-    @parameter parent: parent node
-    @parameter position: position on map
-    @parameter g: cost from start position to current position
-    @parameter h: heuristic cost from current position to goal
-    @parameter f: sum of g and h
-    """
-
-    def __init__(self, parent=None, position=None):
-        self.parent = parent
-        self.position = position
-
-        self.g = 0
-        self.h = 0
-        self.f = 0
-
-    def __eq__(self, other):
-        return self.position == other.position
-
-class Node_start():
+class Node():
     """
     A node class for A* Pathfinding
     @parameter parent: parent node
@@ -94,15 +73,14 @@ class Bidirectional_Astar_Planner():
                 return node
         return None
 
-    def check_intersection(self, open_start, open_end):
+    def check_intersection(self, pos, open_end):
         """
         find intersection part of two openlist
         """
-        for node in open_start:
-            append = self.pointInOpenList(node.position, open_end)
-            if append:
-                self.intersect.append(append)
-        return self.intersect
+        intersect = self.pointInOpenList(pos, open_end)
+        if intersect:
+            return intersect
+        return None
 
     def search_start(self, minF, offsetX, offsetY):
         """
@@ -120,29 +98,45 @@ class Bidirectional_Astar_Planner():
             return
 
         else:
-            # if it is not in openlist, add it to openlist
-            currentNode = self.pointInOpenList(node_pos, self.open_list_start)
-            if not currentNode:
-                currentNode = Node_start(minF, node_pos)
-                currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
-                dx = abs(node_pos[0] - self.endnode.position[0])
-                dy = abs(node_pos[1] - self.endnode.position[1])
-                # closed-form distance
-                # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
-                # euclidean distance
-                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
-                # real distance
-                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
-                currentNode.f = currentNode.g + currentNode.h
-                self.open_list_start.append(currentNode)
+            self.intersect = self.check_intersection(node_pos, self.open_list_end)
+            if self.intersect:
+                path = []
+                current = minF
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                path = path[::-1]
+                path.append(node_pos)
+                current = self.intersect
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                self.path = path
                 return
-            # if it is in openlist, determine if g of currentnode is smaller
             else:
-                action_cost = np.sqrt(offsetX * offsetX + offsetY * offsetY)
-                if minF.g + action_cost < currentNode.g:
-                    currentNode.g = minF.g + action_cost
-                    currentNode.parent = minF
+                # if it is not in openlist, add it to openlist
+                currentNode = self.pointInOpenList(node_pos, self.open_list_start)
+                if not currentNode:
+                    currentNode = Node(minF, node_pos)
+                    currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
+                    dx = abs(node_pos[0] - self.endnode.position[0])
+                    dy = abs(node_pos[1] - self.endnode.position[1])
+                    # closed-form distance
+                    # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
+                    # euclidean distance
+                    # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
+                    # real distance
+                    currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
+                    currentNode.f = currentNode.g + currentNode.h
+                    self.open_list_start.append(currentNode)
                     return
+                # if it is in openlist, determine if g of currentnode is smaller
+                else:
+                    action_cost = np.sqrt(offsetX * offsetX + offsetY * offsetY)
+                    if minF.g + action_cost < currentNode.g:
+                        currentNode.g = minF.g + action_cost
+                        currentNode.parent = minF
+                        return
 
     def search_end(self, minF, offsetX, offsetY):
         """
@@ -163,7 +157,7 @@ class Bidirectional_Astar_Planner():
             # if it is not in openlist, add it to openlist
             currentNode = self.pointInOpenList(node_pos, self.open_list_end)
             if not currentNode:
-                currentNode = Node_end(minF, node_pos)
+                currentNode = Node(minF, node_pos)
                 currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
                 dx = abs(node_pos[0] - self.startnode.position[0])
                 dy = abs(node_pos[1] - self.startnode.position[1])
@@ -192,9 +186,9 @@ class Bidirectional_Astar_Planner():
         """
 
         # Initialize endnode and startnode
-        self.startnode = Node_start(None, start)
+        self.startnode = Node(None, start)
         self.startnode.g = self.startnode.h = self.startnode.f = 0
-        self.endnode = Node_end(None, end)
+        self.endnode = Node(None, end)
         self.endnode.g = self.endnode.h = self.endnode.f = 0
         self.map = gridmap
         self.map_width = map_width
@@ -232,31 +226,20 @@ class Bidirectional_Astar_Planner():
             self.search_end(minF_end, -1, -1)
 
             self.search_start(minF_start, 0, 1)
-            self.search_start(minF_start, 1, 0)
-            self.search_start(minF_start, 0, -1)
-            self.search_start(minF_start, -1, 0)
-            self.search_start(minF_start, 1, 1)
-            self.search_start(minF_start, 1, -1)
-            self.search_start(minF_start, -1, 1)
-            self.search_start(minF_start, -1, -1)
-
-            self.intersect = self.check_intersection(self.open_list_start, self.open_list_end)
-            if self.intersect:
-                print(self.intersect)
-                return
-                # path = []
-                # current = minF
-                # while current is not None:
-                #     path.append(current.position)
-                #     current = current.parent
-                # path = path[::-1]
-                # path.append(node_pos)
-                # current = self.intersect
-                # while current is not None:
-                #     path.append(current.position)
-                #     current = current.parent
-                # self.path = path
-                # return
+            if not self.intersect:
+                self.search_start(minF_start, 1, 0)
+            if not self.intersect:
+                self.search_start(minF_start, 0, -1)
+            if not self.intersect:
+                self.search_start(minF_start, -1, 0)
+            if not self.intersect:
+                self.search_start(minF_start, 1, 1)
+            if not self.intersect:
+                self.search_start(minF_start, 1, -1)
+            if not self.intersect:
+                self.search_start(minF_start, -1, 1)
+            if not self.intersect:
+                self.search_start(minF_start, -1, -1)
 
             # if it is intersection node, then return a path
             if self.intersect:
