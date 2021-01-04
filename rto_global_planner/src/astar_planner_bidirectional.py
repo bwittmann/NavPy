@@ -10,9 +10,7 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
-#TODO:make it can publish command to cmd_vel
 #TODO:fit to different maps
-#TODO:speed up search
 #TODO:consider the point is valid but cannot be reached
 #TODO:add threading
 #TODO:use initial position from amcl node
@@ -206,7 +204,6 @@ class Bidirectional_Astar_Planner():
         self.open_list_end = [self.endnode]
         self.closed_list_end = []
         self.intersect = []
-        self.path = []
 
         # try to find the path with minimal cost
         while True:
@@ -244,27 +241,28 @@ class Bidirectional_Astar_Planner():
             if self.intersect:
                 # get the intersection position with minimal f value
                 minpos = self.intersect[0]
-                current_f = self.pointInOpenList(pos, self.open_list_start).f + self.pointInOpenList(pos, self.open_list_end)
+                current_f = self.pointInOpenList(minpos, self.open_list_start).f + self.pointInOpenList(minpos, self.open_list_end).f
                 for pos in self.intersect:
-                    f = self.pointInOpenList(pos, self.open_list_start).f + self.pointInOpenList(pos, self.open_list_end)
+                    node_start = self.pointInOpenList(pos, self.open_list_start)
+                    node_end = self.pointInOpenList(pos, self.open_list_end)
+                    f = node_start.f + node_end.f
                     if f < current_f:
                         current_f = f
                         minpos = pos
 
                 #generate path
                 path = []
-                current = minpos
+                current = node_end
                 while current is not None:
                     path.append(current.position)
                     current = current.parent
+                path = path[1:]
                 path = path[::-1]
-                path.append(node_pos)
-                current = self.intersect
+                current = node_start
                 while current is not None:
                     path.append(current.position)
                     current = current.parent
-                self.path = path
-                return
+                return path
 
 class main():
     """
