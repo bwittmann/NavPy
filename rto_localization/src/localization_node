@@ -16,7 +16,7 @@ import numpy as np
 from rto_map_server.srv import GetMap
 
 class Particle(object):
-    def __init__(self, id, x,y, yaw):
+    def __init__(self, id, x, y, yaw):
         self.x = x
         self.y = y
         self.id = id
@@ -41,7 +41,7 @@ class ParticleFilter(object):
 
         # Occupancy grid map (self.ogm[x,y])
         self.ogm = occ_grid_map
-        self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.width, occ_grid_map.map.info.height))
+        self.ogm_map = self.ogm_map = np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.width, occ_grid_map.map.info.height)
         
         # Workspace boundaries
         """
@@ -50,9 +50,9 @@ class ParticleFilter(object):
         """
         # Occupancy Grid map parameter
         self.xmin = 0
-        self.xmax = occ_grid_map.map.info.height-1
+        self.xmax = occ_grid_map.map.info.width-1
         self.ymin = 0
-        self.ymax = occ_grid_map.map.info.width-1
+        self.ymax = occ_grid_map.map.info.height-1
         self.resolution = occ_grid_map.map.info.resolution
 
         # laser setup
@@ -126,7 +126,6 @@ class ParticleFilter(object):
         """
         function which initilizes num_particles of particles
         """
-
         for i in range(self.num_particles):
             x, y, yaw = self._get_random_free_space()
             particle = Particle(i, x, y, yaw)
@@ -141,7 +140,7 @@ class ParticleFilter(object):
         weights_not_normalized =[]
 
         for particle in self.particles:
-            self.predict_odometry(particle)
+            particle.x, particle.y, particle.yaw = self.predict_odometry(particle)
             error = self.get_prediction_error(laser_scan_msg, particle)
             weights_not_normalized.append(exp(-error))
         
@@ -313,17 +312,19 @@ class ParticleFilter(object):
         nx = random.gauss(0, self.dynamics_translation_noise_std_dev)
         ny = random.gauss(0, self.dynamics_translation_noise_std_dev)
         nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev)
-        
 
-        particle.x = particle.x + self.dx + nx
-        particle.y = particle.y + self.dy + ny
+        x_new = particle.x + self.dx + nx
+        y_new = particle.y + self.dy + ny
 
         if particle.yaw + self.dyaw + nyaw > pi:
-            particle.yaw = -pi + self.dyaw + nyaw
+            yaw_new = -pi + self.dyaw + nyaw
         elif particle.yaw + self.dyaw + nyaw< -pi:
-            particle.yaw = pi + self.dyaw + nyaw
+            yaw_new = pi + self.dyaw + nyaw
         else:
-            particle.yaw += self.dyaw + nyaw
+            yaw_new = particle.yaw + self.dyaw + nyaw
+
+        return x_new, y_new, yaw_new
+
 
     def get_position(self):
         max_index = np.argmax(self.weights)
@@ -469,12 +470,12 @@ class MonteCarloLocalization(object):
             broadcast_msg.transform.rotation.y = 0.0
             broadcast_msg.transform.rotation.z = 0.0
             broadcast_msg.transform.rotation.w = 1.0
-            #self.br.sendTransform(broadcast_msg)
+            self.br.sendTransform(broadcast_msg)
 
     
 
     def run(self):
-        rate = rospy.Rate(20)
+        rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             if self.odometry != None:
                 self.broadcast_frame_transformation()
