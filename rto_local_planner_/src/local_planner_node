@@ -29,19 +29,6 @@ def threaded(fn):
     return wrapper
 
 
-# simplified motion model of the rto
-def motion(x, y, yaw, v, w, dt):
-    # make more robust
-    if w == 0:
-        xn = x + (v * np.cos(yaw) * dt)
-        yn = y + (v * np.sin(yaw) * dt)
-        yawn = yaw
-    else:
-        xn = x + (v/w) * (- (np.sin(yaw) + np.sin(yaw + w * dt)))
-        yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * dt)))
-        yawn = yawn + dt * w  
-    return xn, yn, yawn
-
 
 class DWALocalPlanner():
 
@@ -63,7 +50,6 @@ class DWALocalPlanner():
         self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
 
-
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
@@ -83,8 +69,7 @@ class DWALocalPlanner():
         self.dt = 1/freq
         self.current_pose = (0, 0, 0)
         self.current_twist = (1, 0, 0.25)
-        self.global_path = []
-
+        self.global_path = [0]
 
 
     def _cb_current_pose(self, msg):
@@ -109,10 +94,10 @@ class DWALocalPlanner():
         self.lock.release()
 
     
+
+
     # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
-    def _get_dynamic_window(self):
-        lin_vel = self.current_twist[0]
-        ang_vel = self.current_twist[2]
+    def _get_dynamic_window(self, lin_vel, ang_vel):
         dt = self.dt
 
         # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
@@ -142,17 +127,46 @@ class DWALocalPlanner():
         return Vd
 
 
+    # TODO: make more robust inregard to w
+    def _motion_update(self, robot_state, control_pair):
+        x, y, yaw = robot_state
+        w, v = control_pair
+        if abs(w) < 0.01:
+            xn = x + (v * np.cos(yaw) * self.dt)
+            yn = y + (v * np.sin(yaw) * self.dt)
+            yawn = yaw
+        else:
+            xn = x + (v/w) * (- (np.sin(yaw) + np.sin(yaw + w * self.dt)))
+            yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.dt)))
+            yawn = yaw + self.dt * w  
+        return (xn, yn, yawn)
+
+
     # TODO: Implement these methods
-    def _get_cost(self, pos):
+    def _get_cost(self, control_pair, robot_state, goal):
+        #ang_vel, lin_vel = control_pair
+        cost_vel = self._get_vel_cost(control_pair[1])
+        cost_angle_to_goal = self._get_angle_to_goal_cost(robot_state, control_pair, goal)
+
+
         '''
-        cost_vel = self._get_vel_cost()
-        cost_prox_to_path = self._get_prox_to_path_cost()
-        cost_angle_to_goal = self._get_angle_to_goal_cost()
-        cost_prox_to_obst = self._get_prox_to_obst_cost()
+        cost_prox_to_path = self._get_prox_to_path_cost(control_pair)
+        cost_prox_to_obst = self._get_prox_to_obst_cost(control_pair)
         
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
             self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
         '''
+
+
+    # DONE
+    def _get_vel_cost(self, lin_vel):
+        cost_vel = (self.max_lin_vel - self.min_lin_vel) - lin_vel
+        return cost_vel
+
+    def _get_angle_to_goal_cost(self, robot_state, control_pair, goal):
+        new_state = self._motion_update(robot_state, control_pair)
+        pass
+
 
 
 
@@ -161,8 +175,27 @@ class DWALocalPlanner():
 
     def run(self):
         while not rospy.is_shutdown():
+            
+            # Get current velocity values
+            lin_vel = self.current_twist[0]
+            ang_vel = self.current_twist[2]
 
-            Vd = self._get_dynamic_window()
+            # Get current global path
+            global_path = self.global_path
+            goal = global_path[-1]
+            
+            # Get current state
+            robot_state = self.current_pose
+            robot_state = (0,0,0)
+
+            # Get dynamic window
+            Vd = self._get_dynamic_window(lin_vel, ang_vel)
+
+            # Check for each sample in Vd which is the best based on the cost
+            print(robot_state)
+            print('mm', self._motion_update(robot_state, (0.2, 0.2)))
+            
+
 
 
 
