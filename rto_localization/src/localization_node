@@ -97,12 +97,6 @@ class ParticleFilter(object):
     def continous_to_grid(self, x_continous, y_continous):
         grid_x_in_xrange = int(x_continous/self.resolution)
         grid_y_in_yrange = int(y_continous/self.resolution)
-        """
-        TODO: maybe just transform x,y coordinates to grid cells but this will maybe caus problems because x_continous is then different to x_grid
-              --> better to check later if x_grid, y_grid if it is a valid position
-        grid_x_in_xrange = min(max(0, x_grid), self.xmax)
-        grid_y_in_yrange = min(max(0, y_grid), self.ymax)
-        """
         return grid_x_in_xrange, grid_y_in_yrange
 
     def _get_random_free_space(self):
@@ -111,8 +105,11 @@ class ParticleFilter(object):
         """
 
         while True:
-            x = np.random.randint(self.xmin, self.xmax*self.resolution)
-            y = np.random.randint(self.ymin, self.ymax*self.resolution)
+            #x = np.random.randint(self.xmin, self.xmax*self.resolution)
+            #y = np.random.randint(self.ymin, self.ymax*self.resolution)
+            x = np.random.randint(self.xmax*self.resolution*0.4, self.xmax*self.resolution*0.6)
+            y = np.random.randint(self.ymax*self.resolution*0.4, self.ymax*self.resolution*0.6)
+
 
             x_grid, y_grid = self.continous_to_grid(x,y)
 
@@ -139,6 +136,7 @@ class ParticleFilter(object):
 
         weights_not_normalized =[]
 
+        # calculate weights 
         for particle in self.particles:
             particle.x, particle.y, particle.yaw = self.predict_odometry(particle)
             error = self.get_prediction_error(laser_scan_msg, particle)
@@ -150,13 +148,16 @@ class ParticleFilter(object):
         self.dyaw = 0
 
         """
-        TODO: check if the reinitialization of particles makes sense. If weights are huge --> particles are very bad --> reinitialize
+        TODO: check if the reinitialization of particles makes sense. If errors are huge --> weights are tiny --> reinitialize (also prevents error: division by zero)
         """
+        #normalize weights
         if sum(weights_not_normalized) == 0:
             self.init_particles()
             self.weights = [1/self.num_particles]*self.num_particles
         else:
             self.weights = [i/sum(weights_not_normalized) for i in weights_not_normalized]
+
+        #resample
         self.resample()
 
     def resample(self):
@@ -183,7 +184,7 @@ class ParticleFilter(object):
             particle = self.particles[index]
             new_particle = Particle(i, particle.x, particle.y, particle.yaw)
             new_particles.append(new_particle)
-        
+
         self.particles = new_particles
 
 
@@ -198,7 +199,7 @@ class ParticleFilter(object):
 
         particle_ranges = []
         step = self.ogm.map.info.resolution
-
+        
         for i in self.subsampled_angles:
             angle = i+yaw
             distance = self.laser_min_range
@@ -261,7 +262,7 @@ class ParticleFilter(object):
         # high error for particles outside of ogm or within an obstacle
         x_grid, y_grid = self.continous_to_grid(particle.x, particle.y)
         if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax or (self.ogm_map[x_grid, y_grid] == 100):
-            error = 3000
+            error = 300
             return error
 
         # get robot laser_scan and simulated laser_scan from particle to calculate difference of those
@@ -343,6 +344,8 @@ class MonteCarloLocalization(object):
 
         self.lock = Lock()
 
+        self.count_mcl = 0
+
         #load map from map_loader_node
         rospy.wait_for_service('get_map')
         try:
@@ -354,7 +357,7 @@ class MonteCarloLocalization(object):
         # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
-        self.eval_beams = 32
+        self.eval_beams = 5
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -397,7 +400,10 @@ class MonteCarloLocalization(object):
 
         #measurement update
         self.lock.acquire()
-        self.pf.handle_observation(msg)
+        self.count_mcl += 1
+        if self.count_mcl == 12:
+            self.pf.handle_observation(msg)
+            self.count_mcl = 0
         self.lock.release()
 
     def odometry_callback(self, msg):
