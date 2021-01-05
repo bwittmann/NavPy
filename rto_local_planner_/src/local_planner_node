@@ -28,6 +28,7 @@ def threaded(fn):
         Thread(target=fn, args=args).start()
     return wrapper
 
+
 # simplified motion model of the rto
 def motion(x, y, yaw, v, w, dt):
     # make more robust
@@ -46,8 +47,6 @@ class DWALocalPlanner():
 
     def __init__(self, freq):
 
-        self.dt = 1/freq
-
         # Init mutex
         self.lock = Lock()
 
@@ -59,13 +58,17 @@ class DWALocalPlanner():
         self.max_acc = rospy.get_param('~max_acc')
         self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
         self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
-        #self.num_samples = rospy.get_param('~num_samples')
+        self.gain_vel = rospy.get_param('~gain_vel')
+        self.gain_prox_to_path = rospy.get_param('~gain_glob_path')
+        self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
+        self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
+
 
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
         rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
-        # local costmap or scan
+        # local costmap or scan or just map for testing
  
         # Init publisher
         rospy.Publisher('/cmd_vel', Twist, queue_size=10)
@@ -77,12 +80,11 @@ class DWALocalPlanner():
         self.twist.angular.y = 0
 
         # Init instance variables
+        self.dt = 1/freq
         self.current_pose = (0, 0, 0)
         self.current_twist = (1, 0, 0.25)
         self.global_path = []
 
-        self.Vs = self._get_Vs()
-        print(self._get_Vr())
 
 
     def _cb_current_pose(self, msg):
@@ -106,22 +108,9 @@ class DWALocalPlanner():
         rospy.loginfo('Local planner reveived a global path')
         self.lock.release()
 
-    @timed
-    def _get_Vs(self):
-        ang_vel_axis = np.linspace(self.min_ang_vel, self.max_ang_vel, self.res_ang_vel_space)
-        lin_vel_axis = np.linspace(self.min_lin_vel, self.max_lin_vel, self.res_lin_vel_space)
-        xv, yv = np.meshgrid(ang_vel_axis, lin_vel_axis)
-
-        Vs = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
-        
-        for i in range(self.res_lin_vel_space):
-            for j in range(self.res_lin_vel_space):
-                Vs[i,j] = (xv[i,j], yv[i,j])
-        return Vs
-
-
-    @timed
-    def _get_Vr(self):
+    
+    # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
+    def _get_dynamic_window(self):
         lin_vel = self.current_twist[0]
         ang_vel = self.current_twist[2]
         dt = self.dt
@@ -142,28 +131,45 @@ class DWALocalPlanner():
         else:
             ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
 
+        # Make use of np.meshgrid to get an array containing all the samples that have been discretely sampled from the Vd control space
         xv, yv = np.meshgrid(ang_vel_space, lin_vel_space)
-        Vr = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        Vd = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
         
         for i in range(self.res_lin_vel_space):
             for j in range(self.res_lin_vel_space):
-                Vr[i,j] = (xv[i,j], yv[i,j])
+                Vd[i,j] = (xv[i,j], yv[i,j])
 
-        return Vr
-
-
+        return Vd
 
 
-    def _get_dynamic_winow(self):
-        pass
+    # TODO: Implement these methods
+    def _get_cost(self, pos):
+        '''
+        cost_vel = self._get_vel_cost()
+        cost_prox_to_path = self._get_prox_to_path_cost()
+        cost_angle_to_goal = self._get_angle_to_goal_cost()
+        cost_prox_to_obst = self._get_prox_to_obst_cost()
+        
+        return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
+            self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
+        '''
 
 
-    def run(self, freq):
+
+
+
+
+    def run(self):
         while not rospy.is_shutdown():
 
-            #rospy.loginfo(self.current_twist)
+            Vd = self._get_dynamic_window()
+
+
+
+            # Uncomment for debugging or testing
+            #print(Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
             
-            rospy.sleep(1/freq)
+            rospy.sleep(self.dt)
 
 
 
@@ -192,6 +198,20 @@ if __name__ == '__main__':
     rospy.init_node('local_planner')
 
     local_planner = DWALocalPlanner(2)
-    local_planner.run(2)
+    local_planner.run()
 
 
+'''
+    @timed
+    def _get_Vs(self):
+        ang_vel_axis = np.linspace(self.min_ang_vel, self.max_ang_vel, self.res_ang_vel_space)
+        lin_vel_axis = np.linspace(self.min_lin_vel, self.max_lin_vel, self.res_lin_vel_space)
+        xv, yv = np.meshgrid(ang_vel_axis, lin_vel_axis)
+
+        Vs = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        
+        for i in range(self.res_lin_vel_space):
+            for j in range(self.res_lin_vel_space):
+                Vs[i,j] = (xv[i,j], yv[i,j])
+        return Vs
+    '''
