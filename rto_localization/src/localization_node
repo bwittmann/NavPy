@@ -111,11 +111,14 @@ class ParticleFilter(object):
         """
 
         while True:
-            #x = np.random.randint(self.xmin, self.xmax*self.resolution)
-            #y = np.random.randint(self.ymin, self.ymax*self.resolution)
+            x = np.random.randint(self.xmin, self.xmax*self.resolution)
+            y = np.random.randint(self.ymin, self.ymax*self.resolution)
+
+            """
+            # Initilize the particles close to the start positon of robot
             x = np.random.randint(self.xmax*self.resolution*0.4, self.xmax*self.resolution*0.6)
             y = np.random.randint(self.ymax*self.resolution*0.4, self.ymax*self.resolution*0.6)
-
+            """
 
             x_grid, y_grid = self.continous_to_grid(x,y)
 
@@ -407,7 +410,7 @@ class MonteCarloLocalization(object):
         #measurement update
         self.lock.acquire()
         self.count_mcl += 1
-        if self.count_mcl == 12:
+        if self.count_mcl == 4:
             self.pf.handle_observation(msg)
             self.count_mcl = 0
         self.lock.release()
@@ -432,12 +435,14 @@ class MonteCarloLocalization(object):
             marker.id = particle.id
             marker.scale.x = 0.2
             marker.scale.y = 0.2
-            marker.type = marker.SPHERE  # point
+            #marker.type = marker.SPHERE  # point
+            marker.type = marker.ARROW  # arrow
             marker.action = 0 # add/modify
             marker.lifetime = rospy.Duration(1)
             marker.color = ColorRGBA(1.0, 0.0, 0, 1.0)
             marker.pose.orientation.w = 1.0
             marker.pose.position.x, marker.pose.position.y = self.pf.ogm_to_map(particle.x, particle.y)
+            marker.pose.orientation.x, marker.pose.orientation.y, marker.pose.orientation.z, marker.pose.orientation.w = transform.quaternion_from_euler(0,0,particle.yaw) 
             marker.pose.position.z = 1.0
             markerArray.markers.append(marker)
         self.pub_particles.publish(markerArray)
