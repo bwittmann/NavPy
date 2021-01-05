@@ -127,7 +127,7 @@ class DWALocalPlanner():
         return Vd
 
 
-    # TODO: make more robust inregard to w
+    # TODO: make more robust inregard to w and check unit of w
     def _motion_update(self, robot_state, control_pair):
         x, y, yaw = robot_state
         w, v = control_pair
@@ -136,7 +136,7 @@ class DWALocalPlanner():
             yn = y + (v * np.sin(yaw) * self.dt)
             yawn = yaw
         else:
-            xn = x + (v/w) * (- (np.sin(yaw) + np.sin(yaw + w * self.dt)))
+            xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.dt)))
             yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.dt)))
             yawn = yaw + self.dt * w  
         return (xn, yn, yawn)
@@ -193,7 +193,7 @@ class DWALocalPlanner():
 
             # Check for each sample in Vd which is the best based on the cost
             print(robot_state)
-            print('mm', self._motion_update(robot_state, (0.2, 0.2)))
+            print('mm', self._motion_update(robot_state, (3.1, 1.0)))
             
 
 
