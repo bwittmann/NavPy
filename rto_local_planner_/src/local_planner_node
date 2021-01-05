@@ -5,7 +5,7 @@ import numpy as np
 import time
 import tf
 
-from threading import Lock
+from threading import Lock, Thread
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan 
@@ -23,6 +23,10 @@ def timed(func):
         return out
     return wrapper
 
+def threaded(fn):
+    def wrapper(*args):
+        Thread(target=fn, args=args).start()
+    return wrapper
 
 # simplified motion model of the rto
 def motion(x, y, yaw, v, w, dt):
@@ -40,7 +44,9 @@ def motion(x, y, yaw, v, w, dt):
 
 class DWALocalPlanner():
 
-    def __init__(self):
+    def __init__(self, freq):
+
+        self.dt = 1/freq
 
         # Init mutex
         self.lock = Lock()
@@ -60,10 +66,10 @@ class DWALocalPlanner():
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
         rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
         # local costmap or scan
-
+ 
         # Init publisher
         rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-
+  
         # Setup messages for publishing
         self.twist = Twist()
         self.twist.linear.z = 0
@@ -72,17 +78,18 @@ class DWALocalPlanner():
 
         # Init instance variables
         self.current_pose = (0, 0, 0)
-        self.current_twist = (0, 0, 0)
+        self.current_twist = (1, 0, 0.25)
         self.global_path = []
 
         self.Vs = self._get_Vs()
+        print(self._get_Vr())
 
 
     def _cb_current_pose(self, msg):
-        self.lock.acquire()
         quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
             msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
         euler = tf.transformations.euler_from_quaternion(quaternion)
+        self.lock.acquire()
         self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
         self.lock.release()
 
@@ -112,18 +119,49 @@ class DWALocalPlanner():
                 Vs[i,j] = (xv[i,j], yv[i,j])
         return Vs
 
+
+    @timed
     def _get_Vr(self):
-        pass
+        lin_vel = self.current_twist[0]
+        ang_vel = self.current_twist[2]
+        dt = self.dt
+
+        # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
+        # and check if the maximal velocity boundaries are crossed. 
+        if (lin_vel + self.max_acc * dt) > self.max_lin_vel:
+            lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, self.max_lin_vel, self.res_lin_vel_space)
+        elif (lin_vel - self.max_acc * dt) < self.min_lin_vel:
+            lin_vel_space = np.linspace(self.min_lin_vel, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
+        else:
+            lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
+
+        if (ang_vel + self.max_acc * dt) > self.max_ang_vel:
+            ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, self.max_ang_vel, self.res_ang_vel_space)
+        elif (ang_vel - self.max_acc * dt) < self.min_ang_vel:
+            ang_vel_space = np.linspace(self.min_ang_vel, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
+        else:
+            ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
+
+        xv, yv = np.meshgrid(ang_vel_space, lin_vel_space)
+        Vr = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        
+        for i in range(self.res_lin_vel_space):
+            for j in range(self.res_lin_vel_space):
+                Vr[i,j] = (xv[i,j], yv[i,j])
+
+        return Vr
+
+
+
 
     def _get_dynamic_winow(self):
         pass
 
 
-
-
     def run(self, freq):
         while not rospy.is_shutdown():
 
+            #rospy.loginfo(self.current_twist)
             
             rospy.sleep(1/freq)
 
@@ -153,7 +191,7 @@ if __name__ == '__main__':
 
     rospy.init_node('local_planner')
 
-    local_planner = DWALocalPlanner()
-    local_planner.run(freq=4)
+    local_planner = DWALocalPlanner(2)
+    local_planner.run(2)
 
 

@@ -4,7 +4,7 @@ max_linear_vel: 1
 min_angular_vel: -0.3
 max_angular_vel: 0.3
 
-# Max acceleration that can be achieved by the rto (Unit: m/s^2)
+# Max acceleration that can be achieved by the rto (Unit: m/s^2 / rad/s^2)
 max_acc: 0.5
 
 # Number of sampled trajectories 
