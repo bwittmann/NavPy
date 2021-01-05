@@ -18,8 +18,8 @@
     -->
 
    <node pkg="rto_localization" type="localization_node" output="screen" name="localization_node">
-         <param name="dynamics_translation_noise_std_dev"    value="0.45" />
-         <param name="dynamics_orientation_noise_std_dev"    value="0.03" />
+         <param name="dynamics_translation_noise_std_dev"    value="0.1" />
+         <param name="dynamics_orientation_noise_std_dev"    value="0.1" />
          <param name="beam_range_measurement_noise_std_dev"  value="0.3" />     
    </node>
 

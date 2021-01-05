@@ -61,6 +61,26 @@ class Bidirectional_Astar_Planner():
     """
     Independent Astar_Planner function class
     """
+    def check_direction(self, node_child, node_parent):
+        """
+        check the direction of next step
+        if the direction does not change, return 0
+        if the direction changes, return 1
+        """
+        node_grand = node_parent.parent
+        if not node_grand:
+            return 0
+        vector1 = (node_child.position[0] - node_parent.position[0], node_child.position[1] - node_parent.position[1])
+        vector2 = (node_parent.position[0] - node_grand.position[0], node_parent.position[1] - node_grand.position[1])
+        if vector1 == vector2:
+            return 0
+        return 5
+
+    def path_smoothing(self, path):
+        """
+        This is a function to smooth path. To make a path looks more realistic.
+        """
+        return path
 
     def getMinNode(self, input_list):
         """
@@ -110,7 +130,7 @@ class Bidirectional_Astar_Planner():
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
 
         # if the offset is out of boundary
-        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
+        if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
             return
 
         # if the node is in closed set, then pass
@@ -125,12 +145,13 @@ class Bidirectional_Astar_Planner():
                 currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
                 dx = abs(node_pos[0] - self.endnode.position[0])
                 dy = abs(node_pos[1] - self.endnode.position[1])
+                turn_cost = self.check_direction(currentNode, minF)
                 # closed-form distance
                 # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
                 # euclidean distance
-                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
+                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.9 + turn_cost
                 # real distance
-                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
+                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
                 self.open_list_start.append(currentNode)
                 return
@@ -150,7 +171,7 @@ class Bidirectional_Astar_Planner():
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
 
         # if the offset is out of boundary
-        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
+        if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
             return
 
         # if the node is in closed set, then pass
@@ -165,12 +186,13 @@ class Bidirectional_Astar_Planner():
                 currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
                 dx = abs(node_pos[0] - self.startnode.position[0])
                 dy = abs(node_pos[1] - self.startnode.position[1])
+                turn_cost = self.check_direction(currentNode, minF)
                 # closed-form distance
                 # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
                 # euclidean distance
-                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
+                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.9 + turn_cost
                 # real distance
-                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
+                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
                 self.open_list_end.append(currentNode)
                 return
@@ -204,6 +226,7 @@ class Bidirectional_Astar_Planner():
         self.open_list_end = [self.endnode]
         self.closed_list_end = []
         self.intersect = []
+        start = True
 
         # try to find the path with minimal cost
         while True:
@@ -252,7 +275,7 @@ class Bidirectional_Astar_Planner():
 
                 #generate path
                 path = []
-                current = node_end
+                current = self.pointInOpenList(minpos, self.open_list_end)
                 while current is not None:
                     path.append(current.position)
                     current = current.parent
@@ -318,6 +341,7 @@ class main():
         self.map_height = OccupancyGrid.info.height
         self.map = self.map_input.reshape(self.map_height, self.map_width) # shape of 169(width)*116(height)
         self.map = np.transpose(self.map)
+        print(self.map.shape)
         self.origin = OccupancyGrid.info.origin.position
 
     def callback_goal(self, PoseStamped):
@@ -332,10 +356,10 @@ class main():
         """
         check the validility of goal
         """
-        if goalx > self.map_width - 1 or goaly > self.map_height - 1:
+        if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             rospy.logwarn('Goal is out of boundary')
             return None
-        elif self.map[int(goalx)][int(goaly)] < 90:
+        elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
             return True
         else:
             return None
