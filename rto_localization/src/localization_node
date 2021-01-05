@@ -11,6 +11,7 @@ from math import sqrt, cos, sin, pi, atan2, inf, log, exp
 from threading import Thread, Lock
 import random
 import numpy as np
+from matplotlib import pyplot as plt
 
 
 from rto_map_server.srv import GetMap
@@ -41,8 +42,13 @@ class ParticleFilter(object):
 
         # Occupancy grid map (self.ogm[x,y])
         self.ogm = occ_grid_map
-        self.ogm_map = self.ogm_map = np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.width, occ_grid_map.map.info.height)
-        
+        self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.height, occ_grid_map.map.info.width))
+        self.ogm_map[self.ogm_map==-1]=100
+        """
+        # Plot ogm_map to see whether it imports the Occupancy grid map right
+        plt.imshow(self.ogm_map, interpolation='nearest')
+        plt.show()
+        """
         # Workspace boundaries
         """
         TODO: check if x = width and y = height
