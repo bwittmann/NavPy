@@ -11,7 +11,34 @@ from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan 
 
 
-class LocalPlanner():
+def timed(func):
+    def wrapper(*args):
+        if not log_times:
+            return func(*args)
+        time_start = time.time()
+        out = func(*args)
+        time_end = time.time()
+        time_took = time_end - time_start
+        rospy.loginfo('Method {} from dwa took {}s.'.format(func.__name__, time_took))
+        return out
+    return wrapper
+
+
+# simplified motion model of the rto
+def motion(x, y, yaw, v, w, dt):
+    # make more robust
+    if w == 0:
+        xn = x + (v * np.cos(yaw) * dt)
+        yn = y + (v * np.sin(yaw) * dt)
+        yawn = yaw
+    else:
+        xn = x + (v/w) * (- (np.sin(yaw) + np.sin(yaw + w * dt)))
+        yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * dt)))
+        yawn = yawn + dt * w  
+    return xn, yn, yawn
+
+
+class DWALocalPlanner():
 
     def __init__(self):
 
@@ -23,7 +50,10 @@ class LocalPlanner():
         self.max_lin_vel = rospy.get_param('~max_linear_vel')
         self.min_ang_vel = rospy.get_param('~min_angular_vel')
         self.max_ang_vel = rospy.get_param('~max_angular_vel')
-        self.num_samples = rospy.get_param('~num_samples')
+        self.max_acc = rospy.get_param('~max_acc')
+        self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
+        self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
+        #self.num_samples = rospy.get_param('~num_samples')
 
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
@@ -44,6 +74,9 @@ class LocalPlanner():
         self.current_pose = (0, 0, 0)
         self.current_twist = (0, 0, 0)
         self.global_path = []
+
+        self.Vs = self._get_Vs()
+
 
     def _cb_current_pose(self, msg):
         self.lock.acquire()
@@ -66,25 +99,61 @@ class LocalPlanner():
         rospy.loginfo('Local planner reveived a global path')
         self.lock.release()
 
+    @timed
+    def _get_Vs(self):
+        ang_vel_axis = np.linspace(self.min_ang_vel, self.max_ang_vel, self.res_ang_vel_space)
+        lin_vel_axis = np.linspace(self.min_lin_vel, self.max_lin_vel, self.res_lin_vel_space)
+        xv, yv = np.meshgrid(ang_vel_axis, lin_vel_axis)
+
+        Vs = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        
+        for i in range(self.res_lin_vel_space):
+            for j in range(self.res_lin_vel_space):
+                Vs[i,j] = (xv[i,j], yv[i,j])
+        return Vs
+
+    def _get_Vr(self):
+        pass
+
+    def _get_dynamic_winow(self):
+        pass
+
+
+
 
     def run(self, freq):
         while not rospy.is_shutdown():
 
-            #rospy.wait_for_message('/amcl_pose', PoseWithCovarianceStamped)
-            #print('got msg')
-
+            
             rospy.sleep(1/freq)
 
+
+
+'''
+- motion model
+- get dynamic window
+- predict trajectory and control
+- set costs
+
+
+Basic algoritm idea:
+- Discretely sample in the robot's control space (dx,dy,dtheta)
+- For each sampled velocity, perform forward simulation from the robot's current state to predict what would happen if the sampled velocity were applied for some (short) period of time.
+- Evaluate (score) each trajectory resulting from the forward simulation, using a metric that incorporates characteristics such as: proximity to obstacles, proximity to the goal, proximity to the global path, and speed. Discard illegal trajectories (those that collide with obstacles).
+- Pick the highest-scoring trajectory and send the associated velocity to the mobile base.
+- Rinse and repeat.
+'''
 
 
 
 
 
 if __name__ == '__main__':
+    log_times = True
 
     rospy.init_node('local_planner')
 
-    local_planner = LocalPlanner()
-    local_planner.run(freq=1)
+    local_planner = DWALocalPlanner()
+    local_planner.run(freq=4)
 
 
