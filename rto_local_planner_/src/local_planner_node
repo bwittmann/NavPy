@@ -147,12 +147,13 @@ class DWALocalPlanner():
         return (xn, yn, yawn)
 
 
-    # TODO: Implement these methods
+    @timed
     def _get_cost(self, control_pair, robot_state, path):
         new_state = self._motion_update(robot_state, control_pair)
         goal = path[-1]
+        lin_vel = control_pair[1]
 
-        cost_vel = self._get_vel_cost(control_pair[1])
+        cost_vel = self._get_vel_cost(lin_vel)
         cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
         cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
         cost_prox_to_obst = self._get_prox_to_obst_cost()
@@ -166,6 +167,7 @@ class DWALocalPlanner():
         cost_vel = (self.max_lin_vel - self.min_lin_vel) - lin_vel
         return cost_vel
 
+
     # DONE
     def _get_angle_to_goal_cost(self, new_state, control_pair, goal):
         xn, yn, yawn = new_state
@@ -174,25 +176,22 @@ class DWALocalPlanner():
         cost_angle_to_goal = abs(angle)/np.pi 
         return cost_angle_to_goal
 
-    
-    @timed
+
+    # DONE
+    # drift of a couple of cm maybe coming from conversion of grid elements to meters
     def _get_prox_to_path_cost(self, new_state, path):
         diff = path - new_state[0:2]
         euc_distances = np.sqrt(np.power(diff[:, 0], 2) + np.power(diff[:, 1], 2))
         min_dist_to_path = np.min(euc_distances)
 
         if min_dist_to_path > 1:
-            return 0
+            return min_dist_to_path #1
         else: 
             return min_dist_to_path
 
-    # TODO: implement
+    # TODO: Implement
     def _get_prox_to_obst_cost(self):
         return 0
-
-
-
-
 
 
 
@@ -213,10 +212,9 @@ class DWALocalPlanner():
             # Get dynamic window
             Vd = self._get_dynamic_window(lin_vel, ang_vel)
 
-            out = self._get_prox_to_path_cost((1,1), global_path)
-            print(out)
-            print(robot_state)
-            print(global_path)
+            control_pair = (0,0)
+
+            cost = self._get_cost(control_pair, robot_state, global_path)
 
             # Loop thourgh dynamic window
             # Exclude unfeasible trajectories
