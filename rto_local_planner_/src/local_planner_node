@@ -193,8 +193,8 @@ class DWALocalPlanner():
 
             # Check for each sample in Vd which is the best based on the cost
             print(robot_state)
-            print('mm', self._motion_update(robot_state, (3.1, 1.0)))
-            
+            #print('mm', self._motion_update(robot_state, (4 * np.pi, 0)))
+            print(np.rad2deg(2 * np.pi))
 
 
 
