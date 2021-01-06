@@ -4,8 +4,8 @@ log_times: True
 # Min and max velocity values of the rto (Unit: m/s, rad/s)
 min_linear_vel: 0
 max_linear_vel: 0.2
-min_angular_vel: -1 #changed for testing purpose
-max_angular_vel: 1
+min_angular_vel: -0.2 #changed for testing purpose
+max_angular_vel: 0.2
 
 # Max acceleration that can be achieved by the rto (Unit: m/s^2 / rad/s^2)
 max_acc: 0.5
@@ -20,4 +20,5 @@ gain_goal_angle: 1
 gain_glob_path: 4
 gain_clearance: 0
 
-# Match_orientation, max_dist_to_goal, costs, etc.
+# Match_orientation, etc.
+min_dist_goal: 0.2
