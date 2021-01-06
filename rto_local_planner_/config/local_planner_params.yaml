@@ -1,6 +1,9 @@
+# To log execution times of time critical operations
+log_times: True
+
 # Min and max velocity values of the rto (Unit: m/s, rad/s)
 min_linear_vel: 0
-max_linear_vel: 1
+max_linear_vel: 0.2
 min_angular_vel: -1 #changed for testing purpose
 max_angular_vel: 1
 
@@ -14,7 +17,7 @@ res_lin_vel_space: 10
 # Gain for calculation of cost function for each trajectory
 gain_vel: 1
 gain_goal_angle: 1
-gain_glob_path: 1
+gain_glob_path: 4
 gain_clearance: 0
 
 # Match_orientation, max_dist_to_goal, costs, etc.
