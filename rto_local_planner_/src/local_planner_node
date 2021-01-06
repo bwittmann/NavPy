@@ -19,7 +19,7 @@ def timed(func):
         out = func(*args)
         time_end = time.time()
         time_took = time_end - time_start
-        rospy.loginfo('Method {} from dwa took {}s.'.format(func.__name__, time_took))
+        rospy.loginfo('Method {} from dwa took {}s.'.format(func.__name__, np.round(time_took, 5)))
         return out
     return wrapper
 
@@ -69,7 +69,7 @@ class DWALocalPlanner():
         self.dt = 1/freq
         self.current_pose = (0, 0, 0)
         self.current_twist = (0, 0, 0)
-        self.global_path = [(0, 0)]
+        self.global_path = np.array([[0, 0], [0, 0]])
 
 
     def _cb_current_pose(self, msg):
@@ -87,15 +87,18 @@ class DWALocalPlanner():
 
     def _cb_global_path(self, msg):
         self.lock.acquire()
-        self.global_path.clear()
+        global_path = []
         for pose in msg.poses:
-            self.global_path.append((pose.pose.position.x, pose.pose.position.y))
+            global_path.append((pose.pose.position.x, pose.pose.position.y))
+        self.global_path = np.array(global_path)
         rospy.loginfo('Local planner reveived a global path')
         self.lock.release()
 
+    @staticmethod
+    def _euclidean_distance(point1, point2=(0,0)):
+        return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+
     
-
-
     # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
     def _get_dynamic_window(self, lin_vel, ang_vel):
         dt = self.dt
@@ -129,6 +132,7 @@ class DWALocalPlanner():
 
     # TODO: make more robust inregard to w and check unit of w
     # TODO: think about it as a forward planning with giving out a trayectory!
+    # or mayby just use endposition for all calculations?
     def _motion_update(self, robot_state, control_pair):
         x, y, yaw = robot_state
         w, v = control_pair
@@ -144,19 +148,17 @@ class DWALocalPlanner():
 
 
     # TODO: Implement these methods
-    def _get_cost(self, control_pair, robot_state, goal):
-        #ang_vel, lin_vel = control_pair
+    def _get_cost(self, control_pair, robot_state, path):
+        new_state = self._motion_update(robot_state, control_pair)
+        goal = path[-1]
+
         cost_vel = self._get_vel_cost(control_pair[1])
-        cost_angle_to_goal = self._get_angle_to_goal_cost(robot_state, control_pair, goal)
-
-
-        '''
-        cost_prox_to_path = self._get_prox_to_path_cost(control_pair)
-        cost_prox_to_obst = self._get_prox_to_obst_cost(control_pair)
+        cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
+        cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
+        cost_prox_to_obst = self._get_prox_to_obst_cost()
         
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
             self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
-        '''
 
 
     # DONE
@@ -164,14 +166,29 @@ class DWALocalPlanner():
         cost_vel = (self.max_lin_vel - self.min_lin_vel) - lin_vel
         return cost_vel
 
-    def _get_angle_to_goal_cost(self, robot_state, control_pair, goal):
-        new_state = self._motion_update(robot_state, control_pair)
-        #print('state change', robot_state, new_state)
+    # DONE
+    def _get_angle_to_goal_cost(self, new_state, control_pair, goal):
         xn, yn, yawn = new_state
         xg, yg = goal
         angle = np.arctan2((yg-yn), (xg-xn)) - yawn
         cost_angle_to_goal = abs(angle)/np.pi 
         return cost_angle_to_goal
+
+    
+    @timed
+    def _get_prox_to_path_cost(self, new_state, path):
+        diff = path - new_state[0:2]
+        euc_distances = np.sqrt(np.power(diff[:, 0], 2) + np.power(diff[:, 1], 2))
+        min_dist_to_path = np.min(euc_distances)
+
+        if min_dist_to_path > 1:
+            return 0
+        else: 
+            return min_dist_to_path
+
+    # TODO: implement
+    def _get_prox_to_obst_cost(self):
+        return 0
 
 
 
@@ -192,12 +209,19 @@ class DWALocalPlanner():
             
             # Get current state
             robot_state = self.current_pose
-            robot_state = (0,0,0)
 
             # Get dynamic window
             Vd = self._get_dynamic_window(lin_vel, ang_vel)
 
-            angle = self._get_angle_to_goal_cost(robot_state, (0,0), goal)
+            out = self._get_prox_to_path_cost((1,1), global_path)
+            print(out)
+            print(robot_state)
+            print(global_path)
+
+            # Loop thourgh dynamic window
+            # Exclude unfeasible trajectories
+
+            
 
 
             # Uncomment for debugging or testing
