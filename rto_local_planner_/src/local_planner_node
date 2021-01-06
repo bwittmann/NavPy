@@ -128,6 +128,7 @@ class DWALocalPlanner():
 
 
     # TODO: make more robust inregard to w and check unit of w
+    # TODO: think about it as a forward planning with giving out a trayectory!
     def _motion_update(self, robot_state, control_pair):
         x, y, yaw = robot_state
         w, v = control_pair
@@ -165,17 +166,12 @@ class DWALocalPlanner():
 
     def _get_angle_to_goal_cost(self, robot_state, control_pair, goal):
         new_state = self._motion_update(robot_state, control_pair)
-        print('state change', robot_state, new_state)
-        print('goal', goal)
+        #print('state change', robot_state, new_state)
         xn, yn, yawn = new_state
-        xg, yg = (-1, 0)
-        yawn = np.pi/2
-
-        print()
-        angle =  (np.arctan2((yg-yn), (xg-xn)) - yawn)
-
-        print(angle)
-        return angle
+        xg, yg = goal
+        angle = np.arctan2((yg-yn), (xg-xn)) - yawn
+        cost_angle_to_goal = abs(angle)/np.pi 
+        return cost_angle_to_goal
 
 
 
