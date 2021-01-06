@@ -43,13 +43,14 @@ class ParticleFilter(object):
         # Occupancy grid map (self.ogm[x,y])
         self.ogm = occ_grid_map
         self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.height, occ_grid_map.map.info.width))
+        """
+        TODO: the next line transforms all "not seen" cells to occupied cells. The map used for developing MCL is recorded poorly
+        obstacles where not completely surrounded with cells 100. To improve the performance i then transformed also the cells within
+        an obstacles which were -1 to 100
+        """
         self.ogm_map[self.ogm_map==-1]=100
 
         # Workspace boundaries
-        """
-        TODO: check if x = width and y = height
-
-        """
         # Occupancy Grid map parameter
         self.xmin = 0
         self.xmax = occ_grid_map.map.info.width-1
@@ -74,13 +75,23 @@ class ParticleFilter(object):
         self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
         self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
 
-    def ogm_to_map(self, x_ogm, y_ogm):
+    def ogm_to_map(self, x_ogm, y_ogm, yaw_ogm):
         """
-        TODO: DONT HARDCODE!
+        Transforms map coordinates in the Occupancy Grid Map (coordinate system in bottom left corner of Occupancy Grid Map)
+        to coordinates in the "map" coordinates system
         """
-        x = x_ogm-3.2
-        y = y_ogm-3
-        return x, y
+
+        """
+        TODO: check if yaw transformation also works in maps where rotation of quaternion is not 0 --> this function is just tested
+        in a map where rotation betwwen Occupancy grid map and map coordinate system is 0 and for that it works
+        """
+
+        x = x_ogm + self.ogm.map.info.origin.position.x
+        y = y_ogm + self.ogm.map.info.origin.position.y
+        _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
+        yaw = yaw_ogm + yaw_map
+        
+        return x, y, yaw
     
     def grid_to_continous(self, x_grid, y_grid):
         """
@@ -100,30 +111,21 @@ class ParticleFilter(object):
 
     def _get_random_free_space(self):
         """
-        randomly samples x,y positions in the free space of the map
+        samples x,y, yaw positions in the free space of the map close to the init position of robot
         """
 
         while True:
-            """
-            x = np.random.randint(self.xmin, self.xmax*self.resolution)
-            y = np.random.randint(self.ymin, self.ymax*self.resolution)
-            """
 
-            """
-            TODO: DONT HARDCODE!
-            """
-        
-            x = 3.2
-            y = 3
+            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.99, -self.ogm.map.info.origin.position.x*1.01)
+            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.99, -self.ogm.map.info.origin.position.y*1.01)
+            _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
+            yaw = np.random.uniform(-yaw_map*0.99, -yaw_map*1.01)
             
-
+            # check if x,y position is not within an obstacle
             x_grid, y_grid = self.continous_to_grid(x,y)
-
             if self.ogm_map[x_grid, y_grid] != 100:
                 break
 
-        yaw = 0
-        #yaw = np.random.uniform(-pi,pi)
         return x, y, yaw
 
     def init_particles(self):
@@ -198,6 +200,11 @@ class ParticleFilter(object):
             - This simulates what the robot would sense in the directions of subsampled angles if it is in the pose of the particle
         """
 
+        """
+        TODO: if you want to be super precise you can use transform laserscan to base link to improve particles. At the moment the 
+        allgorithm is not that precise that this would make huge differences
+        """
+
         particle_ranges = []
         step = self.ogm.map.info.resolution
         
@@ -206,9 +213,7 @@ class ParticleFilter(object):
             distance = 0
             check_if_obstacle_is_sensed = 0
             while distance <= self.laser_max_range:
-                """
-                TODO: check if transformation between grid position and continous position
-                """
+
                 # Get cells in Occupancy Grid Map in direction of angles and distance
                 x_scan = x + cos(angle)*distance
                 y_scan = y + sin(angle)*distance
@@ -335,11 +340,9 @@ class ParticleFilter(object):
 
         return x_new, y_new, yaw_new
 
-
     def get_position(self):
         max_index = np.argmax(self.weights)
-        x,y = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y)
-        yaw = self.particles[max_index].yaw
+        x, y, yaw = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
         return x, y, yaw
 
 class MonteCarloLocalization(object):
@@ -398,9 +401,6 @@ class MonteCarloLocalization(object):
         self.pf.laser_max_range = msg.range_max
 
         # set subsampled laserscans
-        """
-            TODO: check if angles are equivalent in scan topic from -pi to pi
-        """
         #angles from start_angle of laser_scan (-2) to end_angle of laser_scan (2)
         subsampled_angles = np.linspace(msg.angle_min, msg.angle_max, self.eval_beams)
         self.pf.subsampled_angles = subsampled_angles
@@ -443,8 +443,9 @@ class MonteCarloLocalization(object):
             marker.action = 0 # add/modify
             marker.lifetime = rospy.Duration(1)
             marker.color = ColorRGBA(1.0, 0.0, 0, 1.0)
-            marker.pose.position.x, marker.pose.position.y = self.pf.ogm_to_map(particle.x, particle.y)
-            marker.pose.orientation.x, marker.pose.orientation.y, marker.pose.orientation.z, marker.pose.orientation.w = transform.quaternion_from_euler(0,0,particle.yaw) 
+            x_particle, y_particle, yaw_particle = self.pf.ogm_to_map(particle.x, particle.y, particle.yaw)
+            marker.pose.position.x, marker.pose.position.y = x_particle, y_particle
+            marker.pose.orientation.x, marker.pose.orientation.y, marker.pose.orientation.z, marker.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw_particle) 
             marker.pose.position.z = 0.0
             markerArray.markers.append(marker)
 
