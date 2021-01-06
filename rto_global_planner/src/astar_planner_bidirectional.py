@@ -10,9 +10,7 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
-#TODO:make it can publish command to cmd_vel
 #TODO:fit to different maps
-#TODO:speed up search
 #TODO:consider the point is valid but cannot be reached
 #TODO:add threading
 #TODO:use initial position from amcl node
@@ -63,6 +61,26 @@ class Bidirectional_Astar_Planner():
     """
     Independent Astar_Planner function class
     """
+    def check_direction(self, node_child, node_parent):
+        """
+        check the direction of next step
+        if the direction does not change, return 0
+        if the direction changes, return 1
+        """
+        node_grand = node_parent.parent
+        if not node_grand:
+            return 0
+        vector1 = (node_child.position[0] - node_parent.position[0], node_child.position[1] - node_parent.position[1])
+        vector2 = (node_parent.position[0] - node_grand.position[0], node_parent.position[1] - node_grand.position[1])
+        if vector1 == vector2:
+            return 0
+        return 5
+
+    def path_smoothing(self, path):
+        """
+        This is a function to smooth path. To make a path looks more realistic.
+        """
+        return path
 
     def getMinNode(self, input_list):
         """
@@ -101,7 +119,7 @@ class Bidirectional_Astar_Planner():
         for node in open_start:
             append = self.pointInOpenList(node.position, open_end)
             if append:
-                self.intersect.append(append)
+                self.intersect.append(append.position)
         return self.intersect
 
     def search_start(self, minF, offsetX, offsetY):
@@ -112,7 +130,7 @@ class Bidirectional_Astar_Planner():
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
 
         # if the offset is out of boundary
-        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
+        if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
             return
 
         # if the node is in closed set, then pass
@@ -127,12 +145,13 @@ class Bidirectional_Astar_Planner():
                 currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
                 dx = abs(node_pos[0] - self.endnode.position[0])
                 dy = abs(node_pos[1] - self.endnode.position[1])
+                turn_cost = self.check_direction(currentNode, minF)
                 # closed-form distance
                 # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
                 # euclidean distance
-                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
+                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.9 + turn_cost
                 # real distance
-                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
+                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
                 self.open_list_start.append(currentNode)
                 return
@@ -152,7 +171,7 @@ class Bidirectional_Astar_Planner():
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
 
         # if the offset is out of boundary
-        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
+        if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
             return
 
         # if the node is in closed set, then pass
@@ -167,12 +186,13 @@ class Bidirectional_Astar_Planner():
                 currentNode.g = minF.g + np.sqrt(offsetX * offsetX + offsetY * offsetY)
                 dx = abs(node_pos[0] - self.startnode.position[0])
                 dy = abs(node_pos[1] - self.startnode.position[1])
+                turn_cost = self.check_direction(currentNode, minF)
                 # closed-form distance
                 # currentNode.h =  dx + dy + (np.sqrt(2) - 2) * min(dx, dy) + self.map[node_pos[0]][node_pos[1]]
                 # euclidean distance
-                # currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]]
+                currentNode.h =  dx + dy + self.map[node_pos[0]][node_pos[1]] * 0.9 + turn_cost
                 # real distance
-                currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
+                # currentNode.h =  np.sqrt(dx * dx + dy * dy) + self.map[node_pos[0]][node_pos[1]]
                 currentNode.f = currentNode.g + currentNode.h
                 self.open_list_end.append(currentNode)
                 return
@@ -205,11 +225,11 @@ class Bidirectional_Astar_Planner():
         self.closed_list_start = [] # store f of minimal path
         self.open_list_end = [self.endnode]
         self.closed_list_end = []
+        self.intersect = []
+        start = True
 
         # try to find the path with minimal cost
         while True:
-            self.intersect = []
-            self.path = []
 
             # find the node with minimal f in openlist
             minF_start = self.getMinNode(self.open_list_start)
@@ -242,26 +262,30 @@ class Bidirectional_Astar_Planner():
 
             self.intersect = self.check_intersection(self.open_list_start, self.open_list_end)
             if self.intersect:
-                print(self.intersect)
-                return
-                # path = []
-                # current = minF
-                # while current is not None:
-                #     path.append(current.position)
-                #     current = current.parent
-                # path = path[::-1]
-                # path.append(node_pos)
-                # current = self.intersect
-                # while current is not None:
-                #     path.append(current.position)
-                #     current = current.parent
-                # self.path = path
-                # return
+                # get the intersection position with minimal f value
+                minpos = self.intersect[0]
+                current_f = self.pointInOpenList(minpos, self.open_list_start).f + self.pointInOpenList(minpos, self.open_list_end).f
+                for pos in self.intersect:
+                    node_start = self.pointInOpenList(pos, self.open_list_start)
+                    node_end = self.pointInOpenList(pos, self.open_list_end)
+                    f = node_start.f + node_end.f
+                    if f < current_f:
+                        current_f = f
+                        minpos = pos
 
-            # if it is intersection node, then return a path
-            if self.intersect:
-                print(f'path lenth is:{len(self.path)}')
-                return self.path
+                #generate path
+                path = []
+                current = self.pointInOpenList(minpos, self.open_list_end)
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                path = path[1:]
+                path = path[::-1]
+                current = node_start
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                return path
 
 class main():
     """
@@ -317,6 +341,7 @@ class main():
         self.map_height = OccupancyGrid.info.height
         self.map = self.map_input.reshape(self.map_height, self.map_width) # shape of 169(width)*116(height)
         self.map = np.transpose(self.map)
+        print(self.map.shape)
         self.origin = OccupancyGrid.info.origin.position
 
     def callback_goal(self, PoseStamped):
@@ -331,10 +356,10 @@ class main():
         """
         check the validility of goal
         """
-        if goalx > self.map_width - 1 or goaly > self.map_height - 1:
+        if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             rospy.logwarn('Goal is out of boundary')
             return None
-        elif self.map[int(goalx)][int(goaly)] < 90:
+        elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
             return True
         else:
             return None
