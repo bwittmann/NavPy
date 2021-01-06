@@ -2,13 +2,13 @@
 import rospy
 import tf2_ros
 import tf.transformations as transform
-from std_msgs.msg import String, Header, ColorRGBA
-from nav_msgs.msg import OccupancyGrid, MapMetaData, Odometry
-from geometry_msgs.msg import Twist, PoseStamped, Point, PointStamped, TransformStamped
+from std_msgs.msg import ColorRGBA
+from nav_msgs.msg import OccupancyGrid, Odometry
+from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
-from math import sqrt, cos, sin, pi, atan2, inf, log, exp
-from threading import Thread, Lock
+from math import cos, sin, pi, inf, exp
+from threading import Lock
 import random
 import numpy as np
 from matplotlib import pyplot as plt
@@ -44,11 +44,7 @@ class ParticleFilter(object):
         self.ogm = occ_grid_map
         self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.height, occ_grid_map.map.info.width))
         self.ogm_map[self.ogm_map==-1]=100
-        """
-        # Plot ogm_map to see whether it imports the Occupancy grid map right
-        plt.imshow(self.ogm_map, interpolation='nearest')
-        plt.show()
-        """
+
         # Workspace boundaries
         """
         TODO: check if x = width and y = height
@@ -78,33 +74,26 @@ class ParticleFilter(object):
         self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
         self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
 
-    def coordinates_to_map(self ,x_grid , y_grid, yaw_grid):
-
-        """
-        TODO: Transform from particles which are in laserscanframe to robot pos frame
-        """
-        x_continous, y_continous = self.grid_to_continous(x_grid, y_grid)
-        x = x_continous-self.ogm.map.info.origin.position.x
-        y = y_continous-self.ogm.map.info.origin.position.y
-        _, _, orientation_yaw = transform.euler_from_quaternion([self.ogm.map.info.origin.orientation.w, self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z])
-        yaw = yaw_grid-orientation_yaw
-        return x, y, yaw
-
     def ogm_to_map(self, x_ogm, y_ogm):
         """
         TODO: DONT HARDCODE!
         """
-        
         x = x_ogm-3.2
         y = y_ogm-3
         return x, y
     
     def grid_to_continous(self, x_grid, y_grid):
+        """
+        Transforms x, y grid postions in continous x, y positions (coordinate system in bottom left corner of map)
+        """
         x_continous = x_grid*self.resolution
         y_continous = y_grid*self.resolution
         return x_continous, y_continous
 
     def continous_to_grid(self, x_continous, y_continous):
+        """
+        Transforms continous x, y positions in x, y grid postions (coordinate system in bottom left corner of map)
+        """
         grid_x_in_xrange = int(x_continous/self.resolution)
         grid_y_in_yrange = int(y_continous/self.resolution)
         return grid_x_in_xrange, grid_y_in_yrange
@@ -165,11 +154,9 @@ class ParticleFilter(object):
         self.dy = 0
         self.dyaw = 0
 
-        """
-        TODO: Division by zero problem
-        """    
-    
+        # normalize weights
         self.weights = [i/sum(weights_not_normalized) for i in weights_not_normalized]
+
         #resample
         self.resample()
         
@@ -216,24 +203,24 @@ class ParticleFilter(object):
         
         for i in self.subsampled_angles:
             angle = i+yaw
-            #distance = self.laser_min_range
             distance = 0
             check_if_obstacle_is_sensed = 0
             while distance <= self.laser_max_range:
                 """
                 TODO: check if transformation between grid position and continous position
                 """
+                # Get cells in Occupancy Grid Map in direction of angles and distance
                 x_scan = x + cos(angle)*distance
                 y_scan = y + sin(angle)*distance
                 x_grid, y_grid = self.continous_to_grid(x_scan, y_scan)
                 
-                """
-                TODO:check if when x_scan and y_scan is outside of x_min, x_max, y_min, y_max what would the robot sense? inf?
-                """
+                # cell otside of edge of the map
                 if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax:
                     particle_ranges.append(self.laser_max_range)
                     check_if_obstacle_is_sensed = 1
                     break
+
+                # cell is in obstacle
                 elif self.ogm_map[x_grid, y_grid] == 100:
                     if distance <= self.laser_min_range:
                         particle_ranges.append(self.laser_min_range)
@@ -241,9 +228,9 @@ class ParticleFilter(object):
                         particle_ranges.append(distance)
                     check_if_obstacle_is_sensed = 1
                     break
-
                 distance += step
 
+            # no obstacle or edge of map detected
             if check_if_obstacle_is_sensed == 0:
                 particle_ranges.append(self.laser_max_range)
 
@@ -282,13 +269,11 @@ class ParticleFilter(object):
         if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax or (self.ogm_map[x_grid, y_grid] == 100):
             error = 3000
             return error
-
-        # get robot laser_scan and simulated laser_scan from particle to calculate difference of those
         else:
+            # get robot laser_scan and simulated laser_scan from particle to calculate difference of those
             subsampled_ranges = self.subsample_laser_scan(laser_scan_msg)
             particle_ranges = self.get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
             diff_ranges = []
-
             for range_i in range(len(particle_ranges)):
                 diff_ranges.append(abs(subsampled_ranges[range_i]-particle_ranges[range_i]))
 
@@ -326,17 +311,18 @@ class ParticleFilter(object):
         predicts particle according to odometry
         """
 
-        # predict each particle with a given uncertainty to create a set of particles during the resampling which does not contain dublicates 
-        
+        # uncertainty which predicts every particle a little different 
         nx = random.gauss(0, self.dynamics_translation_noise_std_dev)
         ny = random.gauss(0, self.dynamics_translation_noise_std_dev)
         nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev)
 
+        # don't let uncertainty dominate prdiction (when robot does not move, the uncertainty should not move the particles randomly in space)
         if abs(self.dx) < 0.00005 and abs(self.dy) < 0.00005 and abs(self.dyaw) < 0.00005:
             nx*=0.1
             ny*=0.1
             nyaw*=0.1
 
+        # predict particle according to odometry with a little uncertainty
         x_new = particle.x + self.dx + nx
         y_new = particle.y + self.dy + ny
 
@@ -378,7 +364,7 @@ class MonteCarloLocalization(object):
         # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
-        self.eval_beams = 5
+        self.eval_beams = 20
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -440,6 +426,10 @@ class MonteCarloLocalization(object):
         self.last_odometry = self.odometry
 
     def publish(self):
+        """
+        Publish Particles in RVIZ
+        """
+        # publish all particles in red
         markerArray = MarkerArray()
         for particle in self.pf.particles:
             marker = Marker()
@@ -449,7 +439,6 @@ class MonteCarloLocalization(object):
             marker.id = particle.id
             marker.scale.x = 0.1
             marker.scale.y = 0.1
-            #marker.type = marker.SPHERE  # point
             marker.type = marker.ARROW  # arrow
             marker.action = 0 # add/modify
             marker.lifetime = rospy.Duration(1)
@@ -458,6 +447,8 @@ class MonteCarloLocalization(object):
             marker.pose.orientation.x, marker.pose.orientation.y, marker.pose.orientation.z, marker.pose.orientation.w = transform.quaternion_from_euler(0,0,particle.yaw) 
             marker.pose.position.z = 0.0
             markerArray.markers.append(marker)
+
+        # publish the most accurate particle in green
         marker_best = Marker()
         marker_best.header.stamp = rospy.Time.now()
         marker_best.header.frame_id = 'map'
@@ -488,7 +479,6 @@ class MonteCarloLocalization(object):
             _, _, yaw_Odometry = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.w, self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z])
             
             #calculate diff in pose
-
             """
             TODO: is the diff calculated in the right way or the other way round?
             """
@@ -530,7 +520,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 5
+    num_particles = 20
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
