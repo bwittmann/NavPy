@@ -10,8 +10,6 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
 
-#TODO:fit to different maps
-#TODO:consider the point is valid but cannot be reached
 #TODO:add threading
 #TODO:use initial position from amcl node
 
@@ -61,6 +59,83 @@ class Bidirectional_Astar_Planner():
     """
     Independent Astar_Planner function class
     """
+    def check_obstacle(self, start, end):
+        """
+        This function is used to check if there is an obstacle between start point and end point
+
+        @return True: if there is an obstacle
+        @return False: if there is no obstacle
+        """
+        disx = -(start[0] - end[0])
+        disy = -(start[1] - end[1])
+        if abs(disx) > abs(disy):
+            if disx > 0:
+                for i in range(disx):
+                    x = start[0] + i
+                    y = int(start[1] + i * disy / disx)
+                    if self.map[x][y] > 50:
+                        return True
+                return False
+            else:
+                for i in range(-disx):
+                    x = start[0] - i
+                    y = int(start[1] + i * disy / (-disx))
+                    if self.map[x][y] > 50:
+                        return True
+                return False
+        else:
+            if disy > 0:
+                for i in range(disy):
+                    x = int(start[0] + i * disx / disy)
+                    y = start[1] + i
+                    if self.map[x][y] > 50:
+                        return True
+                return False
+            else:
+                for i in range(-disy):
+                    x = int(start[0] + i * disx / (-disy))
+                    y = start[1] - i
+                    if self.map[x][y] > 50:
+                        return True
+                return False
+
+    def get_key_point(self, path):
+        """
+        This function is used to delete non-neccessary point in path
+
+        @return: path with only key point
+        """
+        new_path = [path[0]]
+        length_path = len(path)
+        for i in range(2,length_path - 1):
+            vector1 = (path[i-1][0] - path[i-2][0], path[i-1][1] - path[i-2][1])
+            vector2 = (path[i][0] - path[i-1][0], path[i][1] - path[i-1][1])
+            if vector1 != vector2:
+                new_path.append(path[i-1])
+        new_path.append(path[length_path - 1])
+        return new_path
+
+    def Path_smoothing(self, path):
+        """
+        This is a function to smooth path. To make a path looks more realistic.
+        """
+        # First merge nodes that the direction do not change, keep key nodes only
+        path = self.get_key_point(path)
+
+        # Second using Floyed method to smooth path
+        l = len(path)
+        i = 0
+        while True:
+            while not self.check_obstacle(path[i], path[i+2]):
+                path.pop(i + 1)
+                l = len(path)
+                if i == l - 2:
+                    break
+            i += 1
+            if i > l - 3:
+                break
+        return path
+
     def check_direction(self, node_child, node_parent):
         """
         check the direction of next step
@@ -75,12 +150,6 @@ class Bidirectional_Astar_Planner():
         if vector1 == vector2:
             return 0
         return 5
-
-    def path_smoothing(self, path):
-        """
-        This is a function to smooth path. To make a path looks more realistic.
-        """
-        return path
 
     def getMinNode(self, input_list):
         """
@@ -285,7 +354,8 @@ class Bidirectional_Astar_Planner():
                 while current is not None:
                     path.append(current.position)
                     current = current.parent
-                return path
+                # return path
+                return self.Path_smoothing(path)
 
 class main():
     """
@@ -341,23 +411,23 @@ class main():
         self.map_height = OccupancyGrid.info.height
         self.map = self.map_input.reshape(self.map_height, self.map_width) # shape of 169(width)*116(height)
         self.map = np.transpose(self.map)
-        print(self.map.shape)
         self.origin = OccupancyGrid.info.origin.position
+        self.resolution = OccupancyGrid.info.resolution
 
     def callback_goal(self, PoseStamped):
         """
         callback of goal
         """
         # shift position to position in map
-        self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / 0.05)
-        self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / 0.05)
+        self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
+        self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
 
     def check_valid(self, goalx, goaly):
         """
         check the validility of goal
         """
         if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
-            rospy.logwarn('Goal is out of boundary')
+            # rospy.logwarn('Goal is out of boundary')
             return None
         elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
             return True
@@ -375,8 +445,8 @@ class main():
 
             # initialize start node
             #TODO:replace initial position using amcl
-            self.pos_x = int((0.09035 - self.origin.x) / 0.05)
-            self.pos_y = int((0.01150 - self.origin.y) / 0.05)
+            self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
+            self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
             start = (self.pos_x, self.pos_y)
 
             if self.check_valid(self.goal_x, self.goal_y):
@@ -387,18 +457,15 @@ class main():
                 # publish path
                 for pa in path:
                     pose = PoseStamped()
-                    pose.pose.position.x = pa[0]
-                    pose.pose.position.y = pa[1]
+                    pose.pose.position.x = pa[0] * self.resolution + self.origin.x
+                    pose.pose.position.y = pa[1] * self.resolution + self.origin.y
+                    self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
                     self.msg_path.poses.append(pose)
+                self.pub_plan.publish(self.msg_path_marker)
                 self.pub_path.publish(self.msg_path)
                 self.msg_path.poses.clear()
-                rospy.loginfo('Path is published')
-
-                # publish plan
-                for p in path:
-                    self.msg_path_marker.points.append(Point(p[0]*0.05 + self.origin.x, p[1]*0.05 + self.origin.y, 0))
-                self.pub_plan.publish(self.msg_path_marker)
                 self.msg_path_marker.points.clear()
+                rospy.loginfo('Path is published')
 
             else:
                 rospy.loginfo('Goal is not valid')

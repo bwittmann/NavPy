@@ -91,7 +91,7 @@ class Astar_Planner():
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
 
         # if the offset is out of boundary
-        if node_pos[0] > self.map_width - 1 or node_pos[1] > self.map_height - 1:
+        if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
             return
 
         # if the offset is valid
@@ -220,8 +220,8 @@ class main():
         callback of position
         """
         rospy.wait_for_message('/global_costmap', OccupancyGrid)
-        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / 0.05)
-        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / 0.05)
+        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / self.resolution)
+        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / self.resolution)
         # print(PoseWithCovarianceStamped.pose.pose.position)
 
     def callback_costmap(self, OccupancyGrid):
@@ -234,20 +234,21 @@ class main():
         self.map = self.map_input.reshape(self.map_height, self.map_width) # shape of 169(width)*116(height)
         self.map = np.transpose(self.map)
         self.origin = OccupancyGrid.info.origin.position
+        self.resolution = OccupancyGrid.info.resolution
 
     def callback_goal(self, PoseStamped):
         """
         callback of goal
         """
         # shift position to position in map
-        self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / 0.05)
-        self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / 0.05)
+        self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
+        self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
 
     def check_valid(self, goalx, goaly):
         """
         check the validility of goal
         """
-        if goalx > self.map_width - 1 or goaly > self.map_height - 1:
+        if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             rospy.logwarn('Goal is out of boundary')
             return None
         elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] >= 0:
@@ -275,21 +276,18 @@ class main():
                 end = (int(self.goal_x), int(self.goal_y))
                 path = global_planner.astar(self.map, self.map_width, self.map_height, start, end)
 
-                # publish path
+                # publish path and visulized plan
                 for pa in path:
                     pose = PoseStamped()
-                    pose.pose.position.x = pa[0]
-                    pose.pose.position.y = pa[1]
+                    pose.pose.position.x = pa[0] * self.resolution + self.origin.x
+                    pose.pose.position.y = pa[1] * self.resolution + self.origin.y
+                    self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
                     self.msg_path.poses.append(pose)
+                self.pub_plan.publish(self.msg_path_marker)
                 self.pub_path.publish(self.msg_path)
                 self.msg_path.poses.clear()
-                rospy.loginfo('Path is published')
-
-                # publish plan
-                for p in path:
-                    self.msg_path_marker.points.append(Point(p[0]*0.05 + self.origin.x, p[1]*0.05 + self.origin.y, 0))
-                self.pub_plan.publish(self.msg_path_marker)
                 self.msg_path_marker.points.clear()
+                rospy.loginfo('Path is published')
 
             else:
                 rospy.loginfo('Goal is not valid')
