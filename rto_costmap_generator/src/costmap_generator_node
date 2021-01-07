@@ -10,7 +10,7 @@ import tf
 from threading import Thread, Lock
 from nav_msgs.msg import OccupancyGrid
 from rto_map_server.srv import GetMap
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped
 from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
@@ -132,10 +132,12 @@ class CostmapGenerator():
         self.local_costmap.info.origin.orientation.y = 0
         self.local_costmap.info.origin.orientation.z = 0
         self.local_costmap.info.origin.orientation.w = 1
-        self.local_costmap.data = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8).ravel()
 
         # Init instance variables
         self.current_pose = (0, 0, 0)
+
+        # Init tf listener
+        self.listener = tf.TransformListener()
 
 
     def _cb_current_pose(self, msg):
@@ -225,7 +227,7 @@ class CostmapGenerator():
                 # Apply 'soft padding' for each step in the decay of the cost
                 for idx, val in enumerate(self.soft_padding, start=1):
                     masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
-                        & (global_costmap < val) & (global_costmap > -1) # delete last statement to inc. performance
+                        & (global_costmap < val) & (global_costmap > -1) # Delete last statement to inc. performance
                     global_costmap[masks_soft_padding] = val
             
         # Uncomment for testing and to receive an image of the global_costmap
@@ -237,15 +239,56 @@ class CostmapGenerator():
 
     # TODO: Finish
     def generate_local_costmap(self):
+        self.listener.waitForTransform('base_link', 'hokuyo_link', rospy.Time(0), rospy.Duration(100))
         while not rospy.is_shutdown():
 
-            ranges = np.array(self.scan.ranges)
+            # Get current values from subscribed topics
+            ranges = self.scan.ranges
+            current_pose = self.current_pose
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
+            local_costmap = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8)
+
+            # Create PointStamped message for transformation between frames
+            point_hokuyo_frame = PointStamped()
+            point_hokuyo_frame.header.frame_id = 'hokuyo_link'
+            point_hokuyo_frame.header.stamp = rospy.Time.now()
+            point_hokuyo_frame.point.z = 0
+            
+
+            for idx, element in enumerate(ranges):
+
+                # Somehow transform to baselink, before? necessary?
+                # Maybe change angle sign -> should be fine
+
+                # Check if element would be in local_costmap
+                if element < np.sqrt(2*(self.lc_length/2)**2):
+                    angle = min_angle + idx * angle_inc
+
+                    # Get offset to laser sensor ('hokuyo_link' frame)
+                    dx = np.cos(angle) * element
+                    dy = np.sin(angle) * element
+
+                    point_hokuyo_frame.point.x = dx
+                    point_hokuyo_frame.point.y = dy
+
+                    # Get point coordinates in base_link frame 
+                    point_map_frame = self.listener.transformPoint('base_link', point_hokuyo_frame)
+                    #print(point_map_frame.point.x)
+                    print(idx)
+                    
+ 
+                    
+
+
+
+
+
 
             # Publish local_costmap with robot in its center
-            self.local_costmap.info.origin.position.x = self.current_pose[0] - self.lc_length / 2 
-            self.local_costmap.info.origin.position.y = self.current_pose[1] - self.lc_length / 2 
+            self.local_costmap.info.origin.position.x = current_pose[0] - self.lc_length / 2 
+            self.local_costmap.info.origin.position.y = current_pose[1] - self.lc_length / 2 
+            self.local_costmap.data = local_costmap.ravel()
             self.pub_local_costmap.publish(self.local_costmap)
 
             rospy.sleep(1/self.lc_freq)
