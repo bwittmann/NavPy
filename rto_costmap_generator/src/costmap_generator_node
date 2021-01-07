@@ -6,7 +6,7 @@ import cv2
 import os
 import time
 
-from threading import Thread
+from threading import Thread, Lock
 from nav_msgs.msg import OccupancyGrid
 from rto_map_server.srv import GetMap
 from rto_costmap_generator.srv import SwitchMaps
@@ -65,19 +65,28 @@ class CostmapGenerator():
         reads in parameters from a parameter server, initializes the publisher and estimates the 
         decay of soft padding based on the decay type.
         """
+        # Init mutex
+        self.lock = Lock()
+
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
+
         self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
              rospy.get_param('~global_costmap')['safety_distance']      # Unit: m
         self.padded_val = rospy.get_param('~global_costmap')['padded_val']
         self.decay_type = rospy.get_param('~global_costmap')['decay_type']
         self.soft_padding = rospy.get_param('~global_costmap')['decay_distance']    # Unit: m
         self.apply_soft_padding = rospy.get_param('~global_costmap')['apply_soft_padding']
-        self.log_times = rospy.get_param('~log_times')
-    
+
+        self.lc_length = rospy.get_param('~local_costmap')['length']
+        self.lc_freq= rospy.get_param('~local_costmap')['frequency']
+
+        # Init subscribers
+        rospy.Subscriber('/scan', LaserScan, self._cb_scan)
 
         # Init publisher 
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
+        self.pub_local_costmap = rospy.Publisher('/local_costmap', OccupancyGrid, queue_size=10 ,latch=False)
 
         # Get static map from map server via request to service 'get_map'
         self._call_get_map_srv()
@@ -105,6 +114,20 @@ class CostmapGenerator():
         # Publish padded map on topic /global_costmap (latched)
         self.static_map.header.stamp = rospy.Time.now()
         self.pub_global_costmap.publish(self.static_map)
+
+        # Prepare local_costmap for publishing
+        self.local_costmap = OccupancyGrid()
+        self.local_costmap.header.stamp = rospy.Time.now()
+        self.local_costmap.header.frame_id = 'odom'
+        self.local_costmap.info.resolution = self.static_map.info.resolution
+        self.local_costmap.info.height = int(np.round((self.lc_length / self.static_map.info.resolution), 0))
+        self.local_costmap.info.width = self.local_costmap.info.height
+
+
+    def _cb_scan(self, msg):
+        self.lock.acquire()
+        self.ranges = msg.ranges
+        self.lock.release()
 
 
     def _call_get_map_srv(self):
@@ -188,6 +211,13 @@ class CostmapGenerator():
 
         self.static_map.data = global_costmap.ravel()
 
+    # TODO: Finish
+    def generate_local_costmap(self):
+        while not rospy.is_shutdown():
+
+            print('works')
+            rospy.sleep(1/self.lc_freq)
+
 
 if __name__ == "__main__":
 
@@ -197,3 +227,4 @@ if __name__ == "__main__":
     log_times = rospy.get_param('~log_times')
 
     costmap_gen = CostmapGenerator()
+    costmap_gen.generate_local_costmap()

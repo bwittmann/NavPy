@@ -1,7 +1,7 @@
 # Map to start the costmap generator with.
 init_map_nr: 1
 
-# To log execution times of time critical methods
+# To log execution times of time critical operations
 log_times: True
 
 # Params necessary for padding of obstacles to obatain a point representation 
@@ -13,4 +13,9 @@ global_costmap: {
   apply_soft_padding: True,
   decay_distance: 0.2,
   decay_type: exponential # Linear, exponential, reciprocal
+}
+
+local_costmap: {
+  length: 3,
+  frequency: 2
 }
