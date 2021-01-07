@@ -5,10 +5,12 @@ import numpy as np
 import cv2
 import os
 import time
+import tf
 
 from threading import Thread, Lock
 from nav_msgs.msg import OccupancyGrid
 from rto_map_server.srv import GetMap
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
@@ -83,6 +85,7 @@ class CostmapGenerator():
 
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
+        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
 
         # Init publisher 
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
@@ -118,15 +121,34 @@ class CostmapGenerator():
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
         self.local_costmap.header.stamp = rospy.Time.now()
-        self.local_costmap.header.frame_id = 'odom'
+        self.local_costmap.header.frame_id = 'map'  # 'odom', 'hokuyo_link'?
         self.local_costmap.info.resolution = self.static_map.info.resolution
         self.local_costmap.info.height = int(np.round((self.lc_length / self.static_map.info.resolution), 0))
         self.local_costmap.info.width = self.local_costmap.info.height
+        self.local_costmap.info.origin.position.x = self.current_pose[0] - self.lc_length / 2 # Take in account that robot is in the middle of the map
+        self.local_costmap.info.origin.position.y = self.current_pose[1] - self.lc_length / 2 
+        self.local_costmap.info.origin.position.z = 0
+        self.local_costmap.info.origin.orientation.x = 0
+        self.local_costmap.info.origin.orientation.y = 0
+        self.local_costmap.info.origin.orientation.z = 0
+        self.local_costmap.info.origin.orientation.w = 1
+        self.local_costmap.data = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8).ravel()
 
+        # Init instance variables
+        self.current_pose = (0, 0, 0)
+
+
+    def _cb_current_pose(self, msg):
+        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
+            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        self.lock.acquire()
+        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
+        self.lock.release()
 
     def _cb_scan(self, msg):
         self.lock.acquire()
-        self.ranges = msg.ranges
+        self.scan = msg
         self.lock.release()
 
 
@@ -176,6 +198,7 @@ class CostmapGenerator():
 
         return success
 
+
     @timed
     def _padd_static_map(self):
         """
@@ -211,11 +234,20 @@ class CostmapGenerator():
 
         self.static_map.data = global_costmap.ravel()
 
+
     # TODO: Finish
     def generate_local_costmap(self):
         while not rospy.is_shutdown():
 
-            print('works')
+            ranges = np.array(self.scan.ranges)
+            min_angle = self.scan.angle_min
+            angle_inc = self.scan.angle_increment
+
+            # Publish local_costmap with robot in its center
+            self.local_costmap.info.origin.position.x = self.current_pose[0] - self.lc_length / 2 
+            self.local_costmap.info.origin.position.y = self.current_pose[1] - self.lc_length / 2 
+            self.pub_local_costmap.publish(self.local_costmap)
+
             rospy.sleep(1/self.lc_freq)
 
 
