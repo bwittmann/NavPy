@@ -43,7 +43,13 @@ To see the global path in rviz, run the following code in terminal.
 
         roslaunch rto_global_planner navigation.launch
         
+apply normal astar search:
+        
         roslaunch rto_global_planner global_planner.launch
+        
+or apply bi-directional astar search with path smoothing:
+
+        roslaunch rto_global_planner global_planner_bi.launch
 
 
 ## Simulation Worlds
