@@ -15,6 +15,8 @@ global_costmap: {
   decay_type: exponential # Linear, exponential, reciprocal
 }
 
+# Params necessary for the generation of the local_costmap, which is needed by the
+# local planner to avoid appearing obstacles.
 local_costmap: {
   length: 3,
   frequency: 2

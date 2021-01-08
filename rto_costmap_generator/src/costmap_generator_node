@@ -127,7 +127,7 @@ class CostmapGenerator():
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
         self.local_costmap.header.stamp = rospy.Time.now()
-        self.local_costmap.header.frame_id = 'map'  # 'odom', 'hokuyo_link'?
+        self.local_costmap.header.frame_id = 'map'  # 'base_link'?
         self.local_costmap.info.resolution = self.static_map.info.resolution
         self.local_costmap.info.height = lc_grid_length
         self.local_costmap.info.width = lc_grid_length
@@ -144,7 +144,6 @@ class CostmapGenerator():
 
         # Init tf listener
         self.listener = tf.TransformListener()
-
 
 
     def _cb_current_pose(self, msg):
@@ -247,10 +246,7 @@ class CostmapGenerator():
     # TODO: Finish
     def generate_local_costmap(self):
 
-        self.listener.waitForTransform('base_link', 'hokuyo_link', rospy.Time(0), rospy.Duration(10))
-        #self.listener.waitForTransform('base_link', 'odom', rospy.Time(0), rospy.Duration(10))
-        #self.listener.waitForTransform('map', 'odom', rospy.Time(0), rospy.Duration(10))
-
+        self.listener.waitForTransform('hokuyo_link', 'base_link', rospy.Time(0), rospy.Duration(10))
 
         while not rospy.is_shutdown():
 
@@ -262,11 +258,11 @@ class CostmapGenerator():
 
             # Create PointStamped message for transformation between frames
             point_hokuyo_frame = PointStamped()
-            point_hokuyo_frame.header.frame_id ='hokuyo_link'
+            point_hokuyo_frame.header.frame_id = 'hokuyo_link'
             point_hokuyo_frame.header.stamp = rospy.Time.now()
             point_hokuyo_frame.point.z = 0
 
-            # Set robot position the the middle of the grid map
+            # Set robot position to the middle of the grid map
             local_costmap_middle = int(self.local_costmap.info.height/2)
             robot_pos = (local_costmap_middle, local_costmap_middle)
 
@@ -274,38 +270,42 @@ class CostmapGenerator():
 
             for idx, element in enumerate(ranges):
 
-                # Somehow transform to baselink, before? necessary?
+                # TODO: Somehow transform to baselink, before? necessary?
 
                 # Check if element would be in local_costmap
                 if element < self.lc_length/2: #np.sqrt(2*(self.lc_length/2)**2):
                     angle = min_angle + idx * angle_inc
 
-                    # Get offset to laser sensor ('hokuyo_link' frame)
-                    dx = np.cos(angle) * element
-                    dy = np.sin(angle) * element
+                    # Get offset to laser sensor ('hokuyo_link' frame) in map frame
+                    dx = np.cos(np.pi/2 - (angle + current_pose[2])) * element
+                    dy = np.sin(np.pi/2 - (angle + current_pose[2])) * element
 
                     point_hokuyo_frame.point.x = dx
                     point_hokuyo_frame.point.y = dy
 
-                    # Get point coordinates in base_link frame  # TODO: transform into map frame
-                    point_base_frame = self.listener.transformPoint('base_link', point_hokuyo_frame)
-                    #point_odom_frame = self.listener.transformPoint('odom', point_base_frame)
-                    #point_odom_frame = self.listener.transformPoint('map', point_odom_frame)
+                    # Get transform point into 'base_link' frame
+                    point_base_frame = self.listener.transformPoint('base_link', point_hokuyo_frame) 
 
                     point = (int(np.round(point_base_frame.point.x / self.local_costmap.info.resolution, 0)), \
                         int(np.round(point_base_frame.point.y / self.local_costmap.info.resolution, 0))) 
 
-                    local_costmap[robot_pos[0] - point[0], robot_pos[1] - point[1]] = 100 
+                    # Mark sensed cells as occupied. 
+                    try:
+                        local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100 
+                    except:
+                        pass
 
 
-                    #print(point)
-            #print('---------------------------------')
+
+                    print(point)
+            print('---------------------------------')
 
                     
             # Publish local_costmap with robot in its center
             self.local_costmap.info.origin.position.x = current_pose[0] - self.lc_length / 2 
             self.local_costmap.info.origin.position.y = current_pose[1] - self.lc_length / 2 
-            self.local_costmap.data = np.flip(local_costmap, axis=0).ravel()
+            #self.local_costmap.data = np.flip(local_costmap, axis=0).ravel()
+            self.local_costmap.data = local_costmap.ravel()
             self.pub_local_costmap.publish(self.local_costmap)
 
             rospy.sleep(1/self.lc_freq)
