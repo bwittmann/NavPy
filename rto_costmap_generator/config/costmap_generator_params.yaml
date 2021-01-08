@@ -19,6 +19,6 @@ global_costmap: {
 # local planner to avoid appearing obstacles.
 local_costmap: {
   length: 3,
-  frequency: 2
+  frequency: 2,
   frequency_scan: 40
 }

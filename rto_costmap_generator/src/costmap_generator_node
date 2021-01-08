@@ -14,13 +14,18 @@ from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped
 from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
-
+# global costmap
 # TODO: Increase performance of _padd_static_map() -> constructing mask takes most of the time
 #       worse performance: np.greater()
 # TODO: Think about use of threads again.
 # TODO: Do we need a mutex for a service call?
 # TODO: Add service for changing global costmap? Static?
 # TODO: rospy.Time.now() seems to work now. Check also map_server
+
+# local costmap
+# TODO: Perfectly synchronize messages from /scan and /amcl_pose
+# -> doesnt work yet, since not correctly implemented when using the existing amcl node
+#    (should work on our amcl node)
 
 
 # Create wrapper for easy timing of methods by using a decorator
@@ -162,7 +167,7 @@ class CostmapGenerator():
 
         print('new message income')
 
-        rospy.sleep(1/(self.lc_freq_scan - 1) # To ensure that pose and scan msgs are alligned.
+        rospy.sleep(1/(self.lc_freq_scan - 1)) # To ensure that pose and scan msgs are alligned.
         self.record = False
 
     def _cb_scan(self, msg):
@@ -319,7 +324,6 @@ class CostmapGenerator():
             # Publish local_costmap with robot in its center
             self.local_costmap.info.origin.position.x = current_pose[0] - self.lc_length / 2 
             self.local_costmap.info.origin.position.y = current_pose[1] - self.lc_length / 2 
-            #self.local_costmap.data = np.flip(local_costmap, axis=0).ravel()
             self.local_costmap.data = local_costmap.ravel()
             self.pub_local_costmap.publish(self.local_costmap)
 
