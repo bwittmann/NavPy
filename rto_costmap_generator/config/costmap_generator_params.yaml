@@ -20,4 +20,5 @@ global_costmap: {
 local_costmap: {
   length: 3,
   frequency: 2
+  frequency_scan: 40
 }

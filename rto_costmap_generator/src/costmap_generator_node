@@ -81,11 +81,8 @@ class CostmapGenerator():
         self.apply_soft_padding = rospy.get_param('~global_costmap')['apply_soft_padding']
 
         self.lc_length = rospy.get_param('~local_costmap')['length']
-        self.lc_freq= rospy.get_param('~local_costmap')['frequency']
-
-        # Init subscribers
-        rospy.Subscriber('/scan', LaserScan, self._cb_scan)
-        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+        self.lc_freq = rospy.get_param('~local_costmap')['frequency']
+        self.lc_freq_scan = rospy.get_param('~local_costmap')['frequency_scan']
 
         # Init publisher 
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
@@ -124,6 +121,14 @@ class CostmapGenerator():
         if lc_grid_length % 2 == 0:
             lc_grid_length += 1
 
+        # Init instance variables
+        self.current_pose = (0, 0, 0)
+        self.record = True
+
+        # Init subscribers
+        rospy.Subscriber('/scan', LaserScan, self._cb_scan)
+        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
         self.local_costmap.header.stamp = rospy.Time.now()
@@ -139,25 +144,32 @@ class CostmapGenerator():
         self.local_costmap.info.origin.orientation.z = 0
         self.local_costmap.info.origin.orientation.w = 1
 
-        # Init instance variables
-        self.current_pose = (0, 0, 0)
-
         # Init tf listener
         self.listener = tf.TransformListener()
 
 
+
     def _cb_current_pose(self, msg):
+        self.record = True
+
         quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
             msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
         euler = tf.transformations.euler_from_quaternion(quaternion)
         self.lock.acquire()
         self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
+        self.current_pose_msg = msg
         self.lock.release()
 
+        print('new message income')
+
+        rospy.sleep(1/(self.lc_freq_scan - 1) # To ensure that pose and scan msgs are alligned.
+        self.record = False
+
     def _cb_scan(self, msg):
-        self.lock.acquire()
-        self.scan = msg
-        self.lock.release()
+        if self.record == True:
+            self.lock.acquire()
+            self.scan = msg
+            self.lock.release()
 
 
     def _call_get_map_srv(self):
@@ -249,12 +261,14 @@ class CostmapGenerator():
         self.listener.waitForTransform('hokuyo_link', 'base_link', rospy.Time(0), rospy.Duration(10))
 
         while not rospy.is_shutdown():
-
             # Get current values from subscribed topics
             ranges = self.scan.ranges
             current_pose = self.current_pose
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
+
+            print(self.scan.header.stamp)
+            print(self.current_pose_msg.header.stamp)
 
             # Create PointStamped message for transformation between frames
             point_hokuyo_frame = PointStamped()
@@ -290,14 +304,15 @@ class CostmapGenerator():
                         int(np.round(point_base_frame.point.y / self.local_costmap.info.resolution, 0))) 
 
                     # Mark sensed cells as occupied. 
-                    try:
+                    try:    
                         local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100 
                     except:
                         pass
 
 
 
-                    print(point)
+
+                    #print(point)
             print('---------------------------------')
 
                     
