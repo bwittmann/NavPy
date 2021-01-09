@@ -14,8 +14,8 @@ np.set_printoptions(precision=1)
 np.set_printoptions(suppress=True)
 np.set_printoptions(linewidth=130)
 
-# TODO: Make use of log_times param
 
+# TODO: Make use of log_times param
 
 def timed(func):
     def wrapper(*args):
@@ -129,6 +129,7 @@ class DWALocalPlanner():
         else:
             ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
 
+
         # Make use of np.meshgrid to get an array containing all the samples that have been discretely sampled from the Vd control space
         xv, yv = np.meshgrid(ang_vel_space, lin_vel_space)
         Vd = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
@@ -175,14 +176,14 @@ class DWALocalPlanner():
         cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
         cost_prox_to_obst = self._get_prox_to_obst_cost()
         
-        #return (cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
+        print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
             self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
 
 
     # DONE
     def _get_vel_cost(self, lin_vel):
-        cost_vel = (self.max_lin_vel - self.min_lin_vel) - lin_vel
+        cost_vel = ((self.max_lin_vel - self.min_lin_vel) - lin_vel) / (self.max_lin_vel - self.min_lin_vel)
         return cost_vel
 
 
@@ -191,7 +192,7 @@ class DWALocalPlanner():
         xn, yn, yawn = new_state
         xg, yg = goal
         angle = np.arctan2((yg-yn), (xg-xn)) - yawn
-        cost_angle_to_goal = abs(angle)/np.pi 
+        cost_angle_to_goal = abs(np.arctan2(np.sin(angle), np.cos(angle))) / np.pi
         return cost_angle_to_goal
 
 
@@ -233,23 +234,25 @@ class DWALocalPlanner():
             # Uncomment for debugging or testing
             #print(Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
 
+            '''
             # Calcualte cost for each element in the dynamic window
             t1 = time.time()
             lowest_cost = np.inf
             for i in range(self.res_lin_vel_space):
                 for j in range(self.res_ang_vel_space):
                     cost = self._get_cost(Vd[i,j], robot_state, global_path)
-
-
-
                     if cost < lowest_cost:
                         lowest_cost = cost
                         best_pair = (i,j)
             t2 = time.time()
             print('loop took ', np.round(t2 - t1, 4))
+            '''
 
 
             # TODO: Exclude unfeasible trajectories
+
+            print(self._get_cost((0,0), robot_state, global_path))
+
 
             # Publish velocity commands
             if self.follow_plan == True:
