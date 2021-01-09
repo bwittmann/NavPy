@@ -16,6 +16,7 @@ np.set_printoptions(linewidth=130)
 
 
 # TODO: Make use of log_times param
+# TODO: enable run based on odometry?
 
 def timed(func):
     def wrapper(*args):
@@ -56,11 +57,16 @@ class DWALocalPlanner():
         self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
+        self.odometry_pose = rospy.get_param('~odometry_pose')
 
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
-        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+        
+        if self.odometry_pose == False:
+            rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+        else:
+            rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
         # local costmap or scan or just map for testing
  
         # Init publisher
@@ -76,6 +82,7 @@ class DWALocalPlanner():
         # Init instance variables
         self.dt = 1/freq
         self.current_pose = (0, 0, 0)
+        self.current_pose_odom = (0, 0, 0)
         self.current_twist = (0, 0, 0)
         self.global_path = np.array([[0, 0], [0, 0]])
         self.follow_plan = False
@@ -166,7 +173,7 @@ class DWALocalPlanner():
 
 
     #@timed
-    def _get_cost(self, control_pair, robot_state, path):
+    def _get_cost(self, control_pair, robot_state, path, show_costs=False):
         new_state = self._motion_update(robot_state, control_pair)
         goal = path[-1]
         lin_vel = control_pair[1]
@@ -175,8 +182,10 @@ class DWALocalPlanner():
         cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
         cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
         cost_prox_to_obst = self._get_prox_to_obst_cost()
+
+        if show_costs == True:
+            print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
         
-        print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
             self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
 
@@ -226,7 +235,7 @@ class DWALocalPlanner():
             global_path = self.global_path
             
             # Get current state
-            robot_state = self.current_pose
+            robot_state = self.current_pose_odom
 
             # Get dynamic window
             Vd = self._get_dynamic_window(lin_vel, ang_vel)
@@ -234,7 +243,7 @@ class DWALocalPlanner():
             # Uncomment for debugging or testing
             #print(Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
 
-            '''
+
             # Calcualte cost for each element in the dynamic window
             t1 = time.time()
             lowest_cost = np.inf
@@ -246,12 +255,12 @@ class DWALocalPlanner():
                         best_pair = (i,j)
             t2 = time.time()
             print('loop took ', np.round(t2 - t1, 4))
-            '''
+
 
 
             # TODO: Exclude unfeasible trajectories
 
-            print(self._get_cost((0,0), robot_state, global_path))
+            print(self._get_cost(Vd[best_pair], robot_state, global_path, True))
 
 
             # Publish velocity commands
@@ -287,7 +296,7 @@ if __name__ == '__main__':
 
     log_times = rospy.get_param('~log_times')
 
-    local_planner = DWALocalPlanner(2)
+    local_planner = DWALocalPlanner(5)
     local_planner.run()
 
 
