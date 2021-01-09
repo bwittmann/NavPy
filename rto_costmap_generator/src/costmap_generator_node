@@ -8,7 +8,7 @@ import time
 import tf
 
 from threading import Thread, Lock
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Odometry
 from rto_map_server.srv import GetMap
 from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped
 from rto_costmap_generator.srv import SwitchMaps
@@ -77,6 +77,7 @@ class CostmapGenerator():
 
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
+        self.odometry_pose = rospy.get_param('~odometry_pose')
 
         self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
              rospy.get_param('~global_costmap')['safety_distance']      # Unit: m
@@ -132,7 +133,12 @@ class CostmapGenerator():
 
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
-        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+
+        if self.odometry_pose == False:
+            rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+        else:
+            rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
+
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
@@ -165,7 +171,7 @@ class CostmapGenerator():
         self.current_pose_msg = msg
         self.lock.release()
 
-        print('new message income')
+        #print('new message income')
 
         rospy.sleep(1/(self.lc_freq_scan - 1)) # To ensure that pose and scan msgs are alligned.
         self.record = False
@@ -272,8 +278,8 @@ class CostmapGenerator():
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
 
-            print(self.scan.header.stamp)
-            print(self.current_pose_msg.header.stamp)
+            #print(self.scan.header.stamp)
+            #print(self.current_pose_msg.header.stamp)
 
             # Create PointStamped message for transformation between frames
             point_hokuyo_frame = PointStamped()
@@ -318,7 +324,7 @@ class CostmapGenerator():
 
 
                     #print(point)
-            print('---------------------------------')
+            #print('---------------------------------')
 
                     
             # Publish local_costmap with robot in its center
