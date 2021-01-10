@@ -18,9 +18,9 @@ res_ang_vel_space: 10
 res_lin_vel_space: 10
 
 # Gain for calculation of cost function for each trajectory
-gain_vel: 2.5
+gain_vel: 1
 gain_goal_angle: 4
-gain_glob_path: 60
+gain_glob_path: 100
 gain_clearance: 0
 
 # Match_orientation, etc.
