@@ -58,6 +58,10 @@ class DWALocalPlanner():
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
         self.odometry_pose = rospy.get_param('~odometry_pose')
+        
+        # Init tf transformation
+        self.listener = tf.TransformListener()
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
 
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
@@ -88,11 +92,17 @@ class DWALocalPlanner():
 
 
     def _cb_current_pose(self, msg):
-        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
-            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
+        pose = PoseStamped()
+        pose.pose.position = msg.pose.pose.position
+        pose.pose.orientation = msg.pose.pose.orientation
+        pose.header.frame_id= '/odom'
+        pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
+        position = self.listener.transformPose('/map', pose)
+        quaternion = (position.pose.orientation.x, position.pose.orientation.y, \
+            position.pose.orientation.z, position.pose.orientation.w,)
         euler = tf.transformations.euler_from_quaternion(quaternion)
         self.lock.acquire()
-        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
+        self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
         self.lock.release()
 
     def _cb_current_twist(self, msg):
