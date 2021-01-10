@@ -63,12 +63,18 @@ class Bidirectional_Astar_Planner():
         """
         This function is used to check if there is an obstacle between start point and end point
 
-        @return True: if there is an obstacle
-        @return False: if there is no obstacle
+        @return True: if there is an obstacle between start and end
+        @return False: if there is no obstacle between start and end
         """
+
+        # get the difference between start and end in x,y axis
         disx = -(start[0] - end[0])
         disy = -(start[1] - end[1])
+
+        # The circumstance that difference in x axis is bigger
         if abs(disx) > abs(disy):
+
+            # disx is larger than 0
             if disx > 0:
                 for i in range(disx):
                     x = start[0] + i
@@ -76,6 +82,8 @@ class Bidirectional_Astar_Planner():
                     if self.map[x][y] > 50:
                         return True
                 return False
+
+            # disx is smaller than 0
             else:
                 for i in range(-disx):
                     x = start[0] - i
@@ -83,7 +91,11 @@ class Bidirectional_Astar_Planner():
                     if self.map[x][y] > 50:
                         return True
                 return False
+
+        # The circumstance that difference in y axis is bigger
         else:
+
+            # disy is larger than 0
             if disy > 0:
                 for i in range(disy):
                     x = int(start[0] + i * disx / disy)
@@ -91,6 +103,8 @@ class Bidirectional_Astar_Planner():
                     if self.map[x][y] > 50:
                         return True
                 return False
+
+            # disy is smaller than 0
             else:
                 for i in range(-disy):
                     x = int(start[0] + i * disx / (-disy))
@@ -105,13 +119,18 @@ class Bidirectional_Astar_Planner():
 
         @return: path with only key point
         """
+        # set new path begin at path[0]
         new_path = [path[0]]
+
+        # determine if the moving direction changes, if it does not change, delete the point in middle
         length_path = len(path)
         for i in range(2,length_path - 1):
             vector1 = (path[i-1][0] - path[i-2][0], path[i-1][1] - path[i-2][1])
             vector2 = (path[i][0] - path[i-1][0], path[i][1] - path[i-1][1])
             if vector1 != vector2:
                 new_path.append(path[i-1])
+
+        # at last, add the last element in path to new path
         new_path.append(path[length_path - 1])
         return new_path
 
@@ -125,6 +144,12 @@ class Bidirectional_Astar_Planner():
         # Second using Floyed method to smooth path
         l = len(path)
         i = 0
+
+        # if the path only contains two key points, return the path
+        if l == 2:
+            return path
+
+        # apply path smoothing function
         while True:
             while not self.check_obstacle(path[i], path[i+2]):
                 path.pop(i + 1)
@@ -135,6 +160,62 @@ class Bidirectional_Astar_Planner():
             if i > l - 3:
                 break
         return path
+
+    def Path_argument(self, path):
+        """
+        This is a function to make path consists of only key points to dense path
+        """
+        # set a new path
+        new_path = []
+
+        # main function of path argument
+        length = len(path)
+        i = 0
+        while True:
+
+            # break rule
+            if i == length - 1:
+                break
+
+            # difference in x,y axis
+            disx = -(path[i][0] - path[i+1][0])
+            disy = -(path[i][1] - path[i+1][1])
+
+            # if the two key points can directly connected, then pass
+            if abs(disy) == 1 and abs(disy) == 1:
+                pass
+
+            # if there must be other grids between two key points
+            # The circumstance that difference in x axis is bigger
+            if abs(disx) > abs(disy):
+                # disx is larger than 0
+                if disx > 0:
+                    for j in range(disx):
+                        x = path[i][0] + j
+                        y = int(path[i][1] + j * disy / disx)
+                        new_path.append((x, y))
+                # disx is smaller than 0
+                else:
+                    for j in range(-disx):
+                        x = path[i][0] - j
+                        y = int(path[i][1] + j * disy / (-disx))
+                        new_path.append((x, y))
+            # The circumstance that difference in y axis is bigger
+            else:
+                # disy is larger than 0
+                if disy > 0:
+                    for j in range(disy):
+                        x = int(path[i][0] + j * disx / disy)
+                        y = path[i][1] + j
+                        new_path.append((x, y))
+                # disy is smaller than 0
+                else:
+                    for j in range(-disy):
+                        x = int(path[i][0] + j * disx / (-disy))
+                        y = path[i][1] - j
+                        new_path.append((x, y))
+            i += 1
+        return new_path
 
     def check_direction(self, node_child, node_parent):
         """
@@ -354,8 +435,15 @@ class Bidirectional_Astar_Planner():
                 while current is not None:
                     path.append(current.position)
                     current = current.parent
+
+                # apply path smoothing function
+                path = self.Path_smoothing(path)
+
+                # apply path argument function
+                path = self.Path_argument(path)
+
                 # return path
-                return self.Path_smoothing(path)
+                return path
 
 class main():
     """
