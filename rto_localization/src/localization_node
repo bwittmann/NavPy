@@ -91,7 +91,7 @@ class ParticleFilter(object):
         _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
         yaw = yaw_ogm + yaw_map
         
-        return x, y, yaw
+        return x, y, yaw_ogm
     
     def grid_to_continous(self, x_grid, y_grid):
         """
@@ -473,41 +473,31 @@ class MonteCarloLocalization(object):
     def _broadcast_frame_transformation(self):
         # get most likely robot pose from particle filter
             x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
-            
+            orientation_particle = transform.quaternion_from_euler(0, 0, yaw_Particle_Filter)
+
             # get pose from odometry
             x_Odometry = self.odometry.pose.pose.position.x
             y_Odometry = self.odometry.pose.pose.position.y
-            _, _, yaw_Odometry = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.w, self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z])
-            
+            orientation_odometry = (self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z, self.odometry.pose.pose.orientation.w)
+
             #calculate diff in pose
             """
             TODO: is the diff calculated in the right way or the other way round?
             """
             x_diff = x_Particle_Filter-x_Odometry
             y_diff = y_Particle_Filter-y_Odometry
-            yaw_diff = yaw_Particle_Filter-yaw_Odometry
-            q = transform.quaternion_from_euler(0,0,yaw_diff)
-            
+            orientation_diff = transform.quaternion_multiply(transform.quaternion_inverse(orientation_odometry), orientation_particle)
             broadcast_msg = TransformStamped()
             broadcast_msg.header.stamp = rospy.Time.now()
             broadcast_msg.header.frame_id = "map"
             broadcast_msg.child_frame_id = "odom"
-            """
             broadcast_msg.transform.translation.x = x_diff
             broadcast_msg.transform.translation.y = y_diff
             broadcast_msg.transform.translation.z = 0.0
-            broadcast_msg.transform.rotation.x = q[0]
-            broadcast_msg.transform.rotation.y = q[1]
-            broadcast_msg.transform.rotation.z = q[2]
-            broadcast_msg.transform.rotation.w = q[3]
-            """
-            broadcast_msg.transform.translation.x = 0.0
-            broadcast_msg.transform.translation.y = 0.0
-            broadcast_msg.transform.translation.z = 0.0
-            broadcast_msg.transform.rotation.x = 0.0
-            broadcast_msg.transform.rotation.y = 0.0
-            broadcast_msg.transform.rotation.z = 0.0
-            broadcast_msg.transform.rotation.w = 1.0
+            broadcast_msg.transform.rotation.x = orientation_diff[0]
+            broadcast_msg.transform.rotation.y = orientation_diff[1]
+            broadcast_msg.transform.rotation.z = orientation_diff[2]
+            broadcast_msg.transform.rotation.w = orientation_diff[3]
             self.br.sendTransform(broadcast_msg)
 
     
@@ -521,7 +511,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 20
+    num_particles = 35
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
