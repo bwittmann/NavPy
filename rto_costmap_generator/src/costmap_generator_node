@@ -5,20 +5,27 @@ import numpy as np
 import cv2
 import os
 import time
+import tf
 
-from threading import Thread
-from nav_msgs.msg import OccupancyGrid
+from threading import Thread, Lock
+from nav_msgs.msg import OccupancyGrid, Odometry
 from rto_map_server.srv import GetMap
+from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped
 from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan 
 
-
+# global costmap
 # TODO: Increase performance of _padd_static_map() -> constructing mask takes most of the time
 #       worse performance: np.greater()
 # TODO: Think about use of threads again.
 # TODO: Do we need a mutex for a service call?
 # TODO: Add service for changing global costmap? Static?
 # TODO: rospy.Time.now() seems to work now. Check also map_server
+
+# local costmap
+# TODO: Perfectly synchronize messages from /scan and /amcl_pose
+# -> doesnt work yet, since not correctly implemented when using the existing amcl node
+#    (should work on our amcl node)
 
 
 # Create wrapper for easy timing of methods by using a decorator
@@ -65,19 +72,27 @@ class CostmapGenerator():
         reads in parameters from a parameter server, initializes the publisher and estimates the 
         decay of soft padding based on the decay type.
         """
+        # Init mutex
+        self.lock = Lock()
+
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
+        self.odometry_pose = rospy.get_param('~odometry_pose')
+
         self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
              rospy.get_param('~global_costmap')['safety_distance']      # Unit: m
         self.padded_val = rospy.get_param('~global_costmap')['padded_val']
         self.decay_type = rospy.get_param('~global_costmap')['decay_type']
         self.soft_padding = rospy.get_param('~global_costmap')['decay_distance']    # Unit: m
         self.apply_soft_padding = rospy.get_param('~global_costmap')['apply_soft_padding']
-        self.log_times = rospy.get_param('~log_times')
-    
+
+        self.lc_length = rospy.get_param('~local_costmap')['length']
+        self.lc_freq = rospy.get_param('~local_costmap')['frequency']
+        self.lc_freq_scan = rospy.get_param('~local_costmap')['frequency_scan']
 
         # Init publisher 
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
+        self.pub_local_costmap = rospy.Publisher('/local_costmap', OccupancyGrid, queue_size=10 ,latch=False)
 
         # Get static map from map server via request to service 'get_map'
         self._call_get_map_srv()
@@ -105,6 +120,67 @@ class CostmapGenerator():
         # Publish padded map on topic /global_costmap (latched)
         self.static_map.header.stamp = rospy.Time.now()
         self.pub_global_costmap.publish(self.static_map)
+
+        # Estimate length of the grid map in grid cells
+        lc_grid_length = int(np.round((self.lc_length / self.static_map.info.resolution), 0))
+        # Number has to be uneven so that robot will be located in exactelly the middle
+        if lc_grid_length % 2 == 0:
+            lc_grid_length += 1
+
+        # Init instance variables
+        self.current_pose = (0, 0, 0)
+        self.record = True
+
+        # Init subscribers
+        rospy.Subscriber('/scan', LaserScan, self._cb_scan)
+
+        if self.odometry_pose == False:
+            rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+        else:
+            rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
+
+
+        # Prepare local_costmap for publishing
+        self.local_costmap = OccupancyGrid()
+        self.local_costmap.header.stamp = rospy.Time.now()
+        self.local_costmap.header.frame_id = 'map'  # 'base_link'?
+        self.local_costmap.info.resolution = self.static_map.info.resolution
+        self.local_costmap.info.height = lc_grid_length
+        self.local_costmap.info.width = lc_grid_length
+        self.local_costmap.info.origin.position.x = self.current_pose[0] - self.lc_length / 2 # Take in account that robot is in the middle of the map
+        self.local_costmap.info.origin.position.y = self.current_pose[1] - self.lc_length / 2 
+        self.local_costmap.info.origin.position.z = 0
+        self.local_costmap.info.origin.orientation.x = 0
+        self.local_costmap.info.origin.orientation.y = 0
+        self.local_costmap.info.origin.orientation.z = 0
+        self.local_costmap.info.origin.orientation.w = 1
+
+        # Init tf listener
+        self.listener = tf.TransformListener()
+
+
+
+    def _cb_current_pose(self, msg):
+        self.record = True
+
+        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
+            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        self.lock.acquire()
+        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
+        self.current_pose_msg = msg
+        self.lock.release()
+
+        #print('new message income')
+
+        rospy.sleep(1/(self.lc_freq_scan - 1)) # To ensure that pose and scan msgs are alligned.
+        self.record = False
+
+    def _cb_scan(self, msg):
+        if self.record == True:
+            self.lock.acquire()
+            self.scan = msg
+            self.lock.release()
 
 
     def _call_get_map_srv(self):
@@ -153,6 +229,7 @@ class CostmapGenerator():
 
         return success
 
+
     @timed
     def _padd_static_map(self):
         """
@@ -179,7 +256,7 @@ class CostmapGenerator():
                 # Apply 'soft padding' for each step in the decay of the cost
                 for idx, val in enumerate(self.soft_padding, start=1):
                     masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
-                        & (global_costmap < val) & (global_costmap > -1) # delete last statement to inc. performance
+                        & (global_costmap < val) & (global_costmap > -1) # Delete last statement to inc. performance
                     global_costmap[masks_soft_padding] = val
             
         # Uncomment for testing and to receive an image of the global_costmap
@@ -187,6 +264,76 @@ class CostmapGenerator():
         #print(np.unique(global_costmap))
 
         self.static_map.data = global_costmap.ravel()
+
+
+    # TODO: Finish
+    def generate_local_costmap(self):
+
+        self.listener.waitForTransform('hokuyo_link', 'base_link', rospy.Time(0), rospy.Duration(10))
+
+        while not rospy.is_shutdown():
+            # Get current values from subscribed topics
+            ranges = self.scan.ranges
+            current_pose = self.current_pose
+            min_angle = self.scan.angle_min
+            angle_inc = self.scan.angle_increment
+
+            #print(self.scan.header.stamp)
+            #print(self.current_pose_msg.header.stamp)
+
+            # Create PointStamped message for transformation between frames
+            point_hokuyo_frame = PointStamped()
+            point_hokuyo_frame.header.frame_id = 'hokuyo_link'
+            point_hokuyo_frame.header.stamp = rospy.Time.now()
+            point_hokuyo_frame.point.z = 0
+
+            # Set robot position to the middle of the grid map
+            local_costmap_middle = int(self.local_costmap.info.height/2)
+            robot_pos = (local_costmap_middle, local_costmap_middle)
+
+            local_costmap = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8)
+
+            for idx, element in enumerate(ranges):
+
+                # TODO: Somehow transform to baselink, before? necessary?
+
+                # Check if element would be in local_costmap
+                if element < self.lc_length/2: #np.sqrt(2*(self.lc_length/2)**2):
+                    angle = min_angle + idx * angle_inc
+
+                    # Get offset to laser sensor ('hokuyo_link' frame) in map frame
+                    dx = np.cos(np.pi/2 - (angle + current_pose[2])) * element
+                    dy = np.sin(np.pi/2 - (angle + current_pose[2])) * element
+
+                    point_hokuyo_frame.point.x = dx
+                    point_hokuyo_frame.point.y = dy
+
+                    # Get transform point into 'base_link' frame
+                    point_base_frame = self.listener.transformPoint('base_link', point_hokuyo_frame) 
+
+                    point = (int(np.round(point_base_frame.point.x / self.local_costmap.info.resolution, 0)), \
+                        int(np.round(point_base_frame.point.y / self.local_costmap.info.resolution, 0))) 
+
+                    # Mark sensed cells as occupied. 
+                    try:    
+                        local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100 
+                    except:
+                        pass
+
+
+
+
+                    #print(point)
+            #print('---------------------------------')
+
+                    
+            # Publish local_costmap with robot in its center
+            self.local_costmap.info.origin.position.x = current_pose[0] - self.lc_length / 2 
+            self.local_costmap.info.origin.position.y = current_pose[1] - self.lc_length / 2 
+            self.local_costmap.data = local_costmap.ravel()
+            self.pub_local_costmap.publish(self.local_costmap)
+
+            rospy.sleep(1/self.lc_freq)
 
 
 if __name__ == "__main__":
@@ -197,3 +344,4 @@ if __name__ == "__main__":
     log_times = rospy.get_param('~log_times')
 
     costmap_gen = CostmapGenerator()
+    costmap_gen.generate_local_costmap()

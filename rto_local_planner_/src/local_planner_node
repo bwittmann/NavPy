@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import time
+import tf
+
+from threading import Lock, Thread
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
+from sensor_msgs.msg import LaserScan 
+
+np.set_printoptions(precision=4)
+np.set_printoptions(suppress=True)
+np.set_printoptions(linewidth=130)
+
+
+# TODO: Make use of log_times param
+# TODO: enable run based on odometry?
+
+def timed(func):
+    def wrapper(*args):
+        if not log_times:
+            return func(*args)
+        time_start = time.time()
+        out = func(*args)
+        time_end = time.time()
+        time_took = time_end - time_start
+        rospy.loginfo('Method {} from dwa took {}s.'.format(func.__name__, np.round(time_took, 5)))
+        return out
+    return wrapper
+
+def threaded(fn):
+    def wrapper(*args):
+        Thread(target=fn, args=args).start()
+    return wrapper
+
+
+
+class DWALocalPlanner():
+
+    def __init__(self, freq):
+
+        # Init mutex
+        self.lock = Lock()
+
+        # Get params from parameter server
+        self.min_lin_vel = rospy.get_param('~min_linear_vel')
+        self.max_lin_vel = rospy.get_param('~max_linear_vel')
+        self.min_ang_vel = rospy.get_param('~min_angular_vel')
+        self.max_ang_vel = rospy.get_param('~max_angular_vel')
+        self.max_acc = rospy.get_param('~max_acc')
+        self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
+        self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
+        self.gain_vel = rospy.get_param('~gain_vel')
+        self.gain_prox_to_path = rospy.get_param('~gain_glob_path')
+        self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
+        self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
+        self.min_dist_goal = rospy.get_param('~min_dist_goal')
+        self.odometry_pose = rospy.get_param('~odometry_pose')
+        
+        # Init tf transformation
+        self.listener = tf.TransformListener()
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
+
+        # Init subscriptions
+        rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
+        rospy.Subscriber('/global_path', Path, self._cb_global_path)
+        
+        if self.odometry_pose == False:
+            rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
+        else:
+            rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
+        # local costmap or scan or just map for testing
+ 
+        # Init publisher
+        self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+  
+        # Setup messages for publishing
+        self.twist = Twist()
+        self.twist.linear.y = 0
+        self.twist.linear.z = 0
+        self.twist.angular.x = 0
+        self.twist.angular.y = 0
+
+        # Init instance variables
+        self.dt = 1/freq
+        self.current_pose = (0, 0, 0)
+        self.current_twist = (0, 0, 0)
+        self.global_path = np.array([[0, 0], [0, 0]])
+        self.follow_plan = False
+
+
+    def _cb_current_pose(self, msg):
+        pose = PoseStamped()
+        pose.pose.position = msg.pose.pose.position
+        pose.pose.orientation = msg.pose.pose.orientation
+        pose.header.frame_id= '/odom'
+        pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
+        position = self.listener.transformPose('/map', pose)
+        quaternion = (position.pose.orientation.x, position.pose.orientation.y, \
+            position.pose.orientation.z, position.pose.orientation.w,)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        self.lock.acquire()
+        self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
+        self.lock.release()
+
+    def _cb_current_twist(self, msg):
+        self.lock.acquire()
+        self.current_twist = (msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z)
+        self.lock.release()
+
+    def _cb_global_path(self, msg):
+        self.lock.acquire()
+        self.follow_plan = True
+        global_path = []
+        for pose in msg.poses:
+            global_path.append((pose.pose.position.x, pose.pose.position.y))
+        self.global_path = np.array(global_path)
+        rospy.loginfo('Local planner reveived a global path')
+        self.lock.release()
+
+    @staticmethod
+    def _euclidean_distance(point1, point2=(0,0)):
+        return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+
+    
+    # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
+    def _get_dynamic_window(self, lin_vel, ang_vel):
+        dt = self.dt
+
+        # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
+        # and check if the maximal velocity boundaries are crossed. 
+        if (lin_vel + self.max_acc * dt) > self.max_lin_vel:
+            lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, self.max_lin_vel, self.res_lin_vel_space)
+        elif (lin_vel - self.max_acc * dt) < self.min_lin_vel:
+            lin_vel_space = np.linspace(self.min_lin_vel, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
+        else:
+            lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
+
+        if (ang_vel + self.max_acc * dt) > self.max_ang_vel:
+            ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, self.max_ang_vel, self.res_ang_vel_space)
+        elif (ang_vel - self.max_acc * dt) < self.min_ang_vel:
+            ang_vel_space = np.linspace(self.min_ang_vel, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
+        else:
+            ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
+
+        # Make use of np.meshgrid to get an array containing all the samples that have been discretely sampled from the Vd control space
+        xv, yv = np.meshgrid(ang_vel_space, lin_vel_space)
+        Vd = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        
+        for i in range(self.res_lin_vel_space):
+            for j in range(self.res_lin_vel_space):
+                Vd[i,j] = (xv[i,j], yv[i,j])
+
+        return Vd
+
+
+    # TODO: make more robust inregard to w and check unit of w
+    # TODO: think about it as a forward planning with giving out a trayectory!
+    # or mayby just use endposition for all calculations?
+    def _motion_update(self, robot_state, control_pair):
+        x, y, yaw = robot_state
+        w, v = control_pair
+        if abs(w) < 0.001:
+            xn = x + (v * np.cos(yaw) * self.dt)
+            yn = y + (v * np.sin(yaw) * self.dt)
+            yawn = yaw
+        else:
+            xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.dt)))
+            yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.dt)))
+            yawn = yaw + self.dt * w  
+        return (xn, yn, yawn)
+
+
+    def _check_goal_reached(self, robot_state, path):
+        if self._euclidean_distance(robot_state[:2], path[-1]) < self.min_dist_goal:
+            return True
+        else:
+            return False
+
+
+    #@timed
+    def _get_cost(self, control_pair, robot_state, path, show_costs=False):
+        new_state = self._motion_update(robot_state, control_pair)
+        goal = path[-1]
+        lin_vel = control_pair[1]
+
+        cost_vel = self._get_vel_cost(lin_vel)
+        cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
+        cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
+        cost_prox_to_obst = self._get_prox_to_obst_cost()
+
+        if show_costs == True:
+            print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
+        
+        return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
+            self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
+
+
+    # DONE
+    def _get_vel_cost(self, lin_vel):
+        cost_vel = ((self.max_lin_vel - self.min_lin_vel) - lin_vel) / (self.max_lin_vel - self.min_lin_vel)
+        return cost_vel
+
+
+    # DONE
+    def _get_angle_to_goal_cost(self, new_state, control_pair, goal):
+        xn, yn, yawn = new_state
+        xg, yg = goal
+        angle = np.arctan2((yg-yn), (xg-xn)) - yawn
+        cost_angle_to_goal = abs(np.arctan2(np.sin(angle), np.cos(angle))) / np.pi
+        return cost_angle_to_goal
+
+
+    # DONE
+    # drift of a couple of cm maybe coming from conversion of grid elements to meters
+    def _get_prox_to_path_cost(self, new_state, path):
+        diff = path - new_state[0:2]
+        euc_distances = np.sqrt(np.power(diff[:, 0], 2) + np.power(diff[:, 1], 2))
+        min_dist_to_path = np.min(euc_distances)
+
+        if min_dist_to_path > 1:
+            return min_dist_to_path #1
+        else: 
+            return min_dist_to_path
+
+
+    # TODO: Implement
+    def _get_prox_to_obst_cost(self):
+        return 0
+
+
+
+    def run(self):
+        while not rospy.is_shutdown():
+            
+            # Get current velocity values
+            lin_vel = self.current_twist[0]
+            ang_vel = self.current_twist[2]
+
+            # Get current global path
+            global_path = self.global_path
+            
+            # Get current state
+            robot_state = self.current_pose
+
+            # Get dynamic window
+            Vd = self._get_dynamic_window(lin_vel, ang_vel)
+
+
+            # Calcualte cost for each element in the dynamic window
+            t1 = time.time()
+            lowest_cost = np.inf
+            for i in range(self.res_lin_vel_space):
+                for j in range(self.res_ang_vel_space):
+                    cost = self._get_cost(Vd[i,j], robot_state, global_path)
+                    if cost < lowest_cost:
+                        lowest_cost = cost
+                        best_pair = (i,j)
+            t2 = time.time()
+            print('loop took ', np.round(t2 - t1, 4))
+
+
+
+            # TODO: Exclude unfeasible trajectories
+
+            # Uncomment for debugging or testing
+            print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, False))
+            print('v:', np.round(lin_vel, 3), np.round(ang_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+
+
+            # Publish velocity commands
+            if self.follow_plan == True:
+                self.twist.linear.x = Vd[best_pair[0],best_pair[1]][1]
+                self.twist.angular.z = Vd[best_pair[0],best_pair[1]][0]
+                self.pub_cmd_vel.publish(self.twist)
+
+            if self._check_goal_reached(robot_state, global_path) == True:
+                rospy.loginfo('Goal position reached.')
+                self.follow_plan = False
+                self.twist.linear.x = 0
+                self.twist.angular.z = 0
+                self.pub_cmd_vel.publish(self.twist)
+
+
+            rospy.sleep(self.dt)
+
+
+
+'''
+Basic algoritm idea:
+- Discretely sample in the robot's control space (dx,dy,dtheta)
+- For each sampled velocity, perform forward simulation from the robot's current state to predict what would happen if the sampled velocity were applied for some (short) period of time.
+- Evaluate (score) each trajectory resulting from the forward simulation, using a metric that incorporates characteristics such as: proximity to obstacles, proximity to the goal, proximity to the global path, and speed. Discard illegal trajectories (those that collide with obstacles).
+- Pick the highest-scoring trajectory and send the associated velocity to the mobile base.
+- Rinse and repeat.
+'''
+
+
+
+if __name__ == '__main__':
+    rospy.init_node('local_planner')
+
+    log_times = rospy.get_param('~log_times')
+
+    local_planner = DWALocalPlanner(10)
+    local_planner.run()
+
+
+'''
+    @timed
+    def _get_Vs(self):
+        ang_vel_axis = np.linspace(self.min_ang_vel, self.max_ang_vel, self.res_ang_vel_space)
+        lin_vel_axis = np.linspace(self.min_lin_vel, self.max_lin_vel, self.res_lin_vel_space)
+        xv, yv = np.meshgrid(ang_vel_axis, lin_vel_axis)
+
+        Vs = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        
+        for i in range(self.res_lin_vel_space):
+            for j in range(self.res_lin_vel_space):
+                Vs[i,j] = (xv[i,j], yv[i,j])
+        return Vs
+    '''

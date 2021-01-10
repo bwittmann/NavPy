@@ -1,8 +1,11 @@
 # Map to start the costmap generator with.
 init_map_nr: 1
 
-# To log execution times of time critical methods
+# To log execution times of time critical operations
 log_times: True
+
+# Use the pose of the odometry message for position estimation
+odometry_pose: True
 
 # Params necessary for padding of obstacles to obatain a point representation 
 # of the robot for the task of path planning.
@@ -13,4 +16,12 @@ global_costmap: {
   apply_soft_padding: True,
   decay_distance: 0.2,
   decay_type: exponential # Linear, exponential, reciprocal
+}
+
+# Params necessary for the generation of the local_costmap, which is needed by the
+# local planner to avoid appearing obstacles.
+local_costmap: {
+  length: 3,
+  frequency: 2,
+  frequency_scan: 40
 }
