@@ -157,8 +157,8 @@ class ParticleFilter(object):
         self.dyaw = 0
 
         # normalize weights
-        self.weights = [i/sum(weights_not_normalized) for i in weights_not_normalized]
-
+        weights_new = [i/sum(weights_not_normalized) for i in weights_not_normalized]
+        self.weights = weights_new.copy()
         #resample
         self._resample()
         
@@ -187,8 +187,10 @@ class ParticleFilter(object):
             particle = self.particles[index]
             new_particle = Particle(i, particle.x, particle.y, particle.yaw)
             new_particles.append(new_particle)
+            rospy.loginfo(index)
 
-        self.particles = new_particles
+        self.particles = new_particles.copy()
+        rospy.loginfo(self.weights)
 
 
     def _get_laser_scan_for_particle(self, x, y, yaw):
@@ -367,7 +369,7 @@ class MonteCarloLocalization(object):
         # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
-        self.eval_beams = 20
+        self.eval_beams = 6 
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -387,8 +389,8 @@ class MonteCarloLocalization(object):
         self.br = tf2_ros.TransformBroadcaster()
 
         # Subscribers (LaserScan, Odometry)
-        self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1)
-        self.odom_sub = rospy.Subscriber('/odom', Odometry,  self.odometry_callback, queue_size=1)
+        self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1) # 40hz
+        self.odom_sub = rospy.Subscriber('/odom', Odometry,  self.odometry_callback, queue_size=1) #20hz
 
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
         self.pub_particles = rospy.Publisher('/particles', MarkerArray, queue_size=1)
@@ -410,7 +412,7 @@ class MonteCarloLocalization(object):
         self.count_mcl += 1
 
         #just use every 4th scan for MCL prediction and update
-        if self.count_mcl == 4:
+        if self.count_mcl == 1:
             self.pf.handle_observation(msg)
             self.count_mcl = 0
         self.lock.release()
@@ -419,7 +421,7 @@ class MonteCarloLocalization(object):
         self.odometry = msg
 
         if self.last_odometry:
-            #prediction
+            # calculate odometry change of robot
             self.lock.acquire()
             self.pf.handle_odometry(self.odometry, self.last_odometry)
             self.lock.release()
@@ -511,7 +513,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 35
+    num_particles = 100     
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
