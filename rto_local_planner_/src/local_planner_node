@@ -7,7 +7,7 @@ import tf
 
 from threading import Lock, Thread
 from nav_msgs.msg import Odometry, Path
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped
 from sensor_msgs.msg import LaserScan 
 
 np.set_printoptions(precision=4)
@@ -58,6 +58,7 @@ class DWALocalPlanner():
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
         self.odometry_pose = rospy.get_param('~odometry_pose')
+        self.lookahead = rospy.get_param('~lookahead')
         
         # Init tf transformation
         self.listener = tf.TransformListener()
@@ -82,7 +83,7 @@ class DWALocalPlanner():
         self.twist.linear.z = 0
         self.twist.angular.x = 0
         self.twist.angular.y = 0
-
+ 
         # Init instance variables
         self.dt = 1/freq
         self.current_pose = (0, 0, 0)
@@ -91,7 +92,11 @@ class DWALocalPlanner():
         self.follow_plan = False
 
 
+
     def _cb_current_pose(self, msg):
+        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
+            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
+        '''
         pose = PoseStamped()
         pose.pose.position = msg.pose.pose.position
         pose.pose.orientation = msg.pose.pose.orientation
@@ -100,9 +105,11 @@ class DWALocalPlanner():
         position = self.listener.transformPose('/map', pose)
         quaternion = (position.pose.orientation.x, position.pose.orientation.y, \
             position.pose.orientation.z, position.pose.orientation.w,)
+            '''
         euler = tf.transformations.euler_from_quaternion(quaternion)
         self.lock.acquire()
-        self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
+        #self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
+        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
         self.lock.release()
 
     def _cb_current_twist(self, msg):
@@ -112,13 +119,13 @@ class DWALocalPlanner():
 
     def _cb_global_path(self, msg):
         self.lock.acquire()
-        self.follow_plan = True
         global_path = []
         for pose in msg.poses:
             global_path.append((pose.pose.position.x, pose.pose.position.y))
         self.global_path = np.array(global_path)
-        rospy.loginfo('Local planner reveived a global path')
+        self.follow_plan = True
         self.lock.release()
+        rospy.loginfo('Local planner reveived a global path')
 
     @staticmethod
     def _euclidean_distance(point1, point2=(0,0)):
@@ -127,7 +134,7 @@ class DWALocalPlanner():
     
     # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
     def _get_dynamic_window(self, lin_vel, ang_vel):
-        dt = self.dt
+        dt = self.lookahead
 
         # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
         # and check if the maximal velocity boundaries are crossed. 
@@ -158,18 +165,19 @@ class DWALocalPlanner():
 
     # TODO: make more robust inregard to w and check unit of w
     # TODO: think about it as a forward planning with giving out a trayectory!
-    # or mayby just use endposition for all calculations?
+    #       or mayby just use endposition for all calculations?
+    # TODO: make motion update look further in the future!
     def _motion_update(self, robot_state, control_pair):
         x, y, yaw = robot_state
         w, v = control_pair
         if abs(w) < 0.001:
-            xn = x + (v * np.cos(yaw) * self.dt)
-            yn = y + (v * np.sin(yaw) * self.dt)
-            yawn = yaw
+            xn = x + (v * np.cos(yaw) * self.lookahead)
+            yn = y + (v * np.sin(yaw) * self.lookahead)
+            yawn = yaw + self.lookahead * w 
         else:
-            xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.dt)))
-            yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.dt)))
-            yawn = yaw + self.dt * w  
+            xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.lookahead)))
+            yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.lookahead)))
+            yawn = yaw + self.lookahead * w  
         return (xn, yn, yawn)
 
 
@@ -259,15 +267,18 @@ class DWALocalPlanner():
                         lowest_cost = cost
                         best_pair = (i,j)
             t2 = time.time()
-            print('loop took ', np.round(t2 - t1, 4))
-
+            #print('loop took ', np.round(t2 - t1, 4))
 
 
             # TODO: Exclude unfeasible trajectories
 
             # Uncomment for debugging or testing
-            print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, False))
-            print('v:', np.round(lin_vel, 3), np.round(ang_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+            print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+            print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, True))
+            #print(robot_state)
+            #print(self.global_path)
+            print('----------------------')
+
 
 
             # Publish velocity commands
@@ -276,6 +287,7 @@ class DWALocalPlanner():
                 self.twist.angular.z = Vd[best_pair[0],best_pair[1]][0]
                 self.pub_cmd_vel.publish(self.twist)
 
+            # Check if goal is reached based on distance between robot and goal
             if self._check_goal_reached(robot_state, global_path) == True:
                 rospy.loginfo('Goal position reached.')
                 self.follow_plan = False
@@ -288,17 +300,6 @@ class DWALocalPlanner():
 
 
 
-'''
-Basic algoritm idea:
-- Discretely sample in the robot's control space (dx,dy,dtheta)
-- For each sampled velocity, perform forward simulation from the robot's current state to predict what would happen if the sampled velocity were applied for some (short) period of time.
-- Evaluate (score) each trajectory resulting from the forward simulation, using a metric that incorporates characteristics such as: proximity to obstacles, proximity to the goal, proximity to the global path, and speed. Discard illegal trajectories (those that collide with obstacles).
-- Pick the highest-scoring trajectory and send the associated velocity to the mobile base.
-- Rinse and repeat.
-'''
-
-
-
 if __name__ == '__main__':
     rospy.init_node('local_planner')
 
@@ -307,6 +308,16 @@ if __name__ == '__main__':
     local_planner = DWALocalPlanner(10)
     local_planner.run()
 
+
+
+'''
+Basic algoritm idea:
+- Discretely sample in the robot's control space (dx,dy,dtheta)
+- For each sampled velocity, perform forward simulation from the robot's current state to predict what would happen if the sampled velocity were applied for some (short) period of time.
+- Evaluate (score) each trajectory resulting from the forward simulation, using a metric that incorporates characteristics such as: proximity to obstacles, proximity to the goal, proximity to the global path, and speed. Discard illegal trajectories (those that collide with obstacles).
+- Pick the highest-scoring trajectory and send the associated velocity to the mobile base.
+- Rinse and repeat.
+'''
 
 '''
     @timed
