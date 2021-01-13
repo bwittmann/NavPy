@@ -141,16 +141,20 @@ class DWALocalPlanner():
 
         # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
         # and check if the maximal velocity boundaries are crossed. 
-        if (lin_vel + self.max_acc * dt) > self.max_lin_vel:
+        if (lin_vel + self.max_acc * dt) > self.max_lin_vel and (lin_vel - self.max_acc * dt) < self.min_lin_vel:
+            lin_vel_space = np.linspace(self.min_lin_vel, self.max_lin_vel, self.res_lin_vel_space)
+        elif (lin_vel + self.max_acc * dt) > self.max_lin_vel and (lin_vel - self.max_acc * dt) > self.min_lin_vel:
             lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, self.max_lin_vel, self.res_lin_vel_space)
-        elif (lin_vel - self.max_acc * dt) < self.min_lin_vel:
+        elif (lin_vel - self.max_acc * dt) < self.min_lin_vel and (lin_vel + self.max_acc * dt) < self.max_lin_vel:
             lin_vel_space = np.linspace(self.min_lin_vel, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
         else:
             lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
 
-        if (ang_vel + self.max_acc * dt) > self.max_ang_vel:
+        if (ang_vel + self.max_acc * dt) > self.max_ang_vel and (ang_vel - self.max_acc * dt) < self.min_ang_vel:
+            ang_vel_space = np.linspace(self.min_ang_vel, self.max_ang_vel, self.res_ang_vel_space)
+        elif (ang_vel + self.max_acc * dt) > self.max_ang_vel and (ang_vel - self.max_acc * dt) > self.min_ang_vel:
             ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, self.max_ang_vel, self.res_ang_vel_space)
-        elif (ang_vel - self.max_acc * dt) < self.min_ang_vel:
+        elif (ang_vel - self.max_acc * dt) < self.min_ang_vel and (ang_vel + self.max_acc * dt) < self.min_ang_vel:
             ang_vel_space = np.linspace(self.min_ang_vel, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
         else:
             ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
