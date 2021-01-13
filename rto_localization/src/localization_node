@@ -12,6 +12,8 @@ from threading import Lock
 import random
 import numpy as np
 from matplotlib import pyplot as plt
+import ipdb
+import sys
 
 
 from rto_map_server.srv import GetMap
@@ -187,14 +189,12 @@ class ParticleFilter(object):
             particle = self.particles[index]
             new_particle = Particle(i, particle.x, particle.y, particle.yaw)
             new_particles.append(new_particle)
-            rospy.loginfo(index)
 
         self.particles = new_particles.copy()
-        rospy.loginfo(self.weights)
 
     def get_occupied_cell(self,x,y):
         if x < self.xmin or x > self.xmax or y < self.ymin or y > self.ymax:
-            return self.laser_max_range
+            return 200
         elif self.ogm_map[x, y] == 100:
             return 100
         else:
@@ -214,76 +214,49 @@ class ParticleFilter(object):
         TODO: if you want to be super precise you can use transform laserscan to base link to improve particles. At the moment the 
         allgorithm is not that precise that this would make huge differences
         """
-        
+        #np.set_printoptions(threshold=sys.maxsize)
         particle_ranges = []
-        step = self.ogm.map.info.resolution
-        
-        for i in self.subsampled_angles:
-            angle = i+yaw
-            distance = 0
-            check_if_obstacle_is_sensed = 0
-            while distance <= self.laser_max_range:
-
-                # Get cells in Occupancy Grid Map in direction of angles and distance
-                x_scan = x + cos(angle)*distance
-                y_scan = y + sin(angle)*distance
-                x_grid, y_grid = self._continous_to_grid(x_scan, y_scan)
-                
-                # cell otside of edge of the map
-                if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax:
-                    particle_ranges.append(self.laser_max_range)
-                    check_if_obstacle_is_sensed = 1
-                    break
-
-                # cell is in obstacle
-                elif self.ogm_map[x_grid, y_grid] == 100:
-                    if distance <= self.laser_min_range:
-                        particle_ranges.append(self.laser_min_range)
-                    else:
-                        particle_ranges.append(distance)
-                    check_if_obstacle_is_sensed = 1
-                    break
-                distance += step
-
-            # no obstacle or edge of map detected
-            if check_if_obstacle_is_sensed == 0:
-                particle_ranges.append(self.laser_max_range)
-        """
-        particle_ranges = []
-        angles = np.array(self.subsampled_angles)
-        sin_angles = np.sin(angles) # calculate sin values of all angles
-        cos_angles = np.cos(angles) # calculate cos valuse of all angles
+        angles = np.array(self.subsampled_angles) + yaw # total angle = angle of robot position + laser angle
+        sin_angles = np.sin(angles) # sin values of all angles
+        cos_angles = np.cos(angles) # cos valuse of all angles
         distances = np.arange(0,self.laser_max_range, self.resolution)
-
-        x_values = np.multiply.outer(distances, cos_angles) # observed x_position (distances * cos_angles) --> axis 0 is distances, axis 1 is cosinus of subsampled angles
-        y_values = np.multiply.outer(distances, sin_angles) # observed y_position (distances * sin_angles) --> axis 0 is distances, axis 1 is sinus of subsampled angles
+        
+        x_values = np.multiply.outer(distances, cos_angles)+x # observed x_position (distances * cos_angles) --> axis 0 is distances, axis 1 is cosinus of subsampled angles
+        y_values = np.multiply.outer(distances, sin_angles)+y # observed y_position (distances * sin_angles) --> axis 0 is distances, axis 1 is sinus of subsampled angles
         assert(x_values.shape==(distances.size,cos_angles.size) and y_values.shape==(distances.size,sin_angles.size))
-
-        x_values_grid = (x_values/self.resolution).astype(int) # transform x_positions in grid cell position 
-        y_values_grid = (y_values/self.resolution).astype(int) #transform y_positions in grid cell positions
-
+        
+        #transform positions in grid cells
+        x_values_grid = (x_values/self.resolution).astype(int) 
+        y_values_grid = (y_values/self.resolution).astype(int)
+        
         x_values_grid_vector = x_values_grid.flatten() # turn array in vector --> concatenate vectors each containing observed x_position for one distance for all cos_angles
         y_values_grid_vector = y_values_grid.flatten() # turn array in vector --> concatenate vectors each containing observed y_position for one distance for all sin_angles
         assert(x_values_grid_vector.size == distances.size*cos_angles.size and y_values_grid_vector.size == distances.size*sin_angles.size)
         
-        get_occupied_cell_vectorized = np.vectorize(self.get_occupied_cell) #vectorize function which checks status of cell for one x,y position
-        occupied_info_vector = get_occupied_cell_vectorized(x_values_grid_vector, y_values_grid_vector) # for each x,y position get status of cell (laser_max_range, occupied cell, not occupied cell)
+        # for each x,y position get status of cell (laser_max_range, occupied cell, not occupied cell)
+        get_occupied_cell_vectorized = np.vectorize(self.get_occupied_cell) #vectorize function to apply on vectors
+        occupied_info_vector = get_occupied_cell_vectorized(x_values_grid_vector, y_values_grid_vector)
         assert(occupied_info_vector.size == distances.size*cos_angles.size)
         
-        occupied_info_array = occupied_info_vector.reshape(x_values.shape) # reshape output vector as array distances is axis=0 angles is axis=1
-        
-        occupied_info_array[np.where(occupied_info_array==100)]=np.where(occupied_info_array==100)[0] # replace all cells which contain obstacles by their distance value (index of axis=0)
-        occupied_info_array[occupied_info_array<=self.laser_min_range]=self.laser_min_range # replace all distances which are smaller than laser_min_range by laser_min_range
-        
+        # reshape  vector as array distances is axis=0 angles is axis=1
+        occupied_info_array = occupied_info_vector.reshape(x_values.shape).astype(float)
+
+        # replace all cells which contain obstacles by their distance value (index of axis=0*resolution)
+        occupied_info_array[np.where(occupied_info_array==100)]=np.where(occupied_info_array==100)[0]*self.resolution
+        # replace all cells which contain distance values smaller than laser_min_range and are not free cells with laser_min_range
+        occupied_info_array[(occupied_info_array>0) & (occupied_info_array<=self.laser_min_range)]=self.laser_min_range # replace all distances which are smaller than laser_min_range by laser_min_range
+        #replace all cells which are out of map with laser_max_range
+        occupied_info_array[occupied_info_array==200]=self.laser_max_range
+    
         # go through all angles(axis=1)
         for i in range(occupied_info_array.shape[1]):
-            if np.any(occupied_info_array[:,i]==self.laser_min_range): # does any of the distances for that angle contain laser_min_range
+            if np.any(occupied_info_array[:,i]==self.laser_min_range): # distances for that angle contain laser_min_range
                 particle_ranges.append(self.laser_min_range)
-            elif np.any(occupied_info_array[:,i]==self.laser_max_range) or np.all(occupied_info_array[:,i]==0):
-                particle_ranges.append(self.laser_max_range) # no distance for that angle contains obstacle or Laser_max_range is contained in any distance for that angle
-            else:
-                particle_ranges.append(np.min(occupied_info_array[:,i][np.nonzero(occupied_info_array[:,i])])*self.resolution) # find smallest distance which contains obstacle and ignore empty cells(distance=0)
-        """
+            elif np.all(occupied_info_array[:,i]==0): # no distance for that angle
+                particle_ranges.append(self.laser_max_range)
+            else: # find smallest distance which contains obstacle and ignore empty cells(distance=0)
+                particle_ranges.append(np.min(occupied_info_array[:,i][np.nonzero(occupied_info_array[:,i])]))
+        
         return particle_ranges
 
 
@@ -556,7 +529,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 50     
+    num_particles = 100     
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
