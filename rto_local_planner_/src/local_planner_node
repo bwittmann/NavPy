@@ -170,15 +170,15 @@ class DWALocalPlanner():
     def _motion_update(self, robot_state, control_pair):
         x, y, yaw = robot_state
         w, v = control_pair
-        if abs(w) > 0: # < 0.001:
+        if abs(w) < 0.001:
             xn = x + (v * np.cos(yaw) * self.lookahead)
             yn = y + (v * np.sin(yaw) * self.lookahead)
             #yawn = yaw
             yawn = yaw + self.lookahead * w 
         else:
-            xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.dt)))
-            yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.dt)))
-            yawn = yaw + self.dt * w  
+            xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.lookahead)))
+            yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.lookahead)))
+            yawn = yaw + self.lookahead * w  
         return (xn, yn, yawn)
 
 
