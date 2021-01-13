@@ -58,6 +58,7 @@ class DWALocalPlanner():
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
         self.odometry_pose = rospy.get_param('~odometry_pose')
+        self.lookahead = rospy.get_param('~lookahead')
         
         # Init tf transformation
         self.listener = tf.TransformListener()
@@ -89,6 +90,7 @@ class DWALocalPlanner():
         self.current_twist = (0, 0, 0)
         self.global_path = np.array([[0, 0], [0, 0]])
         self.follow_plan = False
+
 
 
     def _cb_current_pose(self, msg):
@@ -132,7 +134,7 @@ class DWALocalPlanner():
     
     # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
     def _get_dynamic_window(self, lin_vel, ang_vel):
-        dt = self.dt
+        dt = self.lookahead
 
         # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
         # and check if the maximal velocity boundaries are crossed. 
@@ -168,12 +170,11 @@ class DWALocalPlanner():
     def _motion_update(self, robot_state, control_pair):
         x, y, yaw = robot_state
         w, v = control_pair
-        #dt = 1.5
         if abs(w) > 0: # < 0.001:
-            xn = x + (v * np.cos(yaw) * self.dt)
-            yn = y + (v * np.sin(yaw) * self.dt)
+            xn = x + (v * np.cos(yaw) * self.lookahead)
+            yn = y + (v * np.sin(yaw) * self.lookahead)
             #yawn = yaw
-            yawn = yaw + self.dt * w 
+            yawn = yaw + self.lookahead * w 
         else:
             xn = x + (v/w) * ((- np.sin(yaw) + np.sin(yaw + w * self.dt)))
             yn = y + (v/w) * ((np.cos(yaw) - np.cos(yaw + w * self.dt)))
