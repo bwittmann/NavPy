@@ -6,7 +6,7 @@ import time
 import tf
 
 from threading import Lock, Thread
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import Odometry, Path, OccupancyGrid
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped
 from sensor_msgs.msg import LaserScan 
 
@@ -58,34 +58,35 @@ class DWALocalPlanner():
         self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
-        self.odometry_pose = rospy.get_param('~odometry_pose')
+        #self.odometry_pose = rospy.get_param('~odometry_pose')
         self.lookahead = rospy.get_param('~lookahead')
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
         
-        # Init tf transformation
+        # Init tf listener
         self.listener = tf.TransformListener()
         self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
 
         # Init subscriptions
-        rospy.Subscriber('/odom', Odometry, self._cb_current_twist)
+        rospy.Subscriber('/odom', Odometry, self._cb_current_twist_and_pose)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
-        
-        if self.odometry_pose == False:
-            rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
-        else:
-            rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
+        rospy.Subscriber('/local_costmap', OccupancyGrid, self._cb_local_costmap)
+
         # local costmap or scan or just map for testing
- 
+
         # Init publisher
         self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
   
-        # Setup messages for publishing
+        # Setup Twist message for publishing cmd_vel
         self.twist = Twist()
         self.twist.linear.y = 0
         self.twist.linear.z = 0
         self.twist.angular.x = 0
         self.twist.angular.y = 0
+
+        # Setup PoseStamped for transformation of points from frame /odom to /map
+        self.pose = PoseStamped()
+        self.pose.header.frame_id= '/odom'
  
         # Init instance variables
         self.dt = 1/freq
@@ -94,29 +95,20 @@ class DWALocalPlanner():
         self.global_path = np.array([[0, 0], [0, 0]])
         self.follow_plan = False
 
+    def _cb_current_twist_and_pose(self, msg):
+        self.lock.acquire()
+        # Transform robot pose to from /odom to /map frame 
+        self.pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
+        self.pose.pose.position = msg.pose.pose.position
+        self.pose.pose.orientation = msg.pose.pose.orientation
+        position = self.listener.transformPose('/map', self.pose)
 
-
-    def _cb_current_pose(self, msg):
-        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
-            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
-        '''
-        pose = PoseStamped()
-        pose.pose.position = msg.pose.pose.position
-        pose.pose.orientation = msg.pose.pose.orientation
-        pose.header.frame_id= '/odom'
-        pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
-        position = self.listener.transformPose('/map', pose)
+        # Transform quaternion received from msg to euler representation
         quaternion = (position.pose.orientation.x, position.pose.orientation.y, \
-            position.pose.orientation.z, position.pose.orientation.w,)
-            '''
+            position.pose.orientation.z, position.pose.orientation.w)
         euler = tf.transformations.euler_from_quaternion(quaternion)
-        self.lock.acquire()
-        #self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
-        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
-        self.lock.release()
 
-    def _cb_current_twist(self, msg):
-        self.lock.acquire()
+        self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
         self.current_twist = (msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z)
         self.lock.release()
 
@@ -129,6 +121,11 @@ class DWALocalPlanner():
         self.follow_plan = True
         self.lock.release()
         rospy.loginfo('Local planner reveived a global path')
+
+
+    def _cb_local_costmap(self, msg):
+        pass
+
 
     @staticmethod
     def _euclidean_distance(point1, point2=(0,0)):
@@ -349,4 +346,29 @@ Basic algoritm idea:
             for j in range(self.res_lin_vel_space):
                 Vs[i,j] = (xv[i,j], yv[i,j])
         return Vs
-    '''
+'''
+'''
+    def _cb_current_pose(self, msg):
+        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, \
+            msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,)
+    
+        pose = PoseStamped()
+        pose.pose.position = msg.pose.pose.position
+        pose.pose.orientation = msg.pose.pose.orientation
+        pose.header.frame_id= '/odom'
+        pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
+        position = self.listener.transformPose('/map', pose)
+        quaternion = (position.pose.orientation.x, position.pose.orientation.y, \
+            position.pose.orientation.z, position.pose.orientation.w,)
+        
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        self.lock.acquire()
+        #self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
+        self.current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y, euler[2])
+        self.lock.release()
+
+    def _cb_current_twist(self, msg):
+        self.lock.acquire()
+        self.current_twist = (msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z)
+        self.lock.release()
+'''
