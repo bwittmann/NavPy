@@ -1,5 +1,8 @@
 # To log execution times of time critical operations
-log_times: True
+log_times: False
+
+# Return messages to the terminal that are relevant for debugging
+debug_mode: True
 
 # Use the pose of the odometry message for position estimation
 odometry_pose: True
