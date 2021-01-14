@@ -15,6 +15,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import ipdb
 import sys
+from timeit import default_timer as timer
 
 
 from rto_map_server.srv import GetMap
@@ -141,11 +142,10 @@ class ParticleFilter(object):
             self.particles.append(particle)
 
 
-    def handle_observation(self, laser_scan_msg):
+    def handle_observation(self, laser_scan_msg): #time = 0.6
         """
         prediction and measurement update is started
         """
-
         weights_not_normalized =[]
 
         # calculate weights 
@@ -166,11 +166,10 @@ class ParticleFilter(object):
         self._resample()
         
 
-    def _resample(self):
+    def _resample(self): #time = 0.0003
         """
         resample a new set of particles (systematic resampling)
         """
-
         new_particles = []
         index = random.randint(0,self.num_particles-1)
         max_weight = max(self.weights)
@@ -193,7 +192,7 @@ class ParticleFilter(object):
 
         self.particles = new_particles.copy()
 
-    def get_occupied_cell(self,x,y):
+    def get_occupied_cell(self,x,y): #time = 1e-6
         if x < self.xmin or x > self.xmax or y < self.ymin or y > self.ymax:
             return 200
         elif self.ogm_map[x, y] == 100:
@@ -202,7 +201,7 @@ class ParticleFilter(object):
             return 0
         
 
-    def _get_laser_scan_for_particle(self, x, y, yaw):
+    def _get_laser_scan_for_particle(self, x, y, yaw): # time = 0.006
         """
         simulate what a the robot would sense with laser if it is located in particle pose (x,y,yaw):
             - Take x, y, yaw pose of robot and sense the surrounding in the directions of subsampled angles
@@ -210,26 +209,6 @@ class ParticleFilter(object):
             - Incrementally go trough all angles and distances and check if there is an obstacle or edge of map
             - This simulates what the robot would sense in the directions of subsampled angles if it is in the pose of the particle
         """
-        """
-        TODO: transform between hokuyo and base_link increases performance but high computational cost
-        self.t = tf.Transformer(True, rospy.Duration(10.0))
-        self.listener = tf.TransformListener()
-        now = rospy.Time.now()
-        self.listener.waitForTransform('/hokuyo_link', '/base_link', now, rospy.Duration(4.0)) 
-        pose_msg = PoseStamped()
-        pose_msg.header.frame_id = '/hokuyo_link'
-        pose_msg.pose.position.x=x_in
-        pose_msg.pose.position.y=y_in
-        q = transform.quaternion_from_euler(0,0,yaw_in)
-        pose_msg.pose.orientation.x = q[0]
-        pose_msg.pose.orientation.y = q[1]
-        pose_msg.pose.orientation.z = q[2]
-        pose_msg.pose.orientation.w = q[3]
-        new_pose = self.listener.transformPose('/base_link', pose_msg)
-        x,y = new_pose.pose.position.x, new_pose.pose.position.y
-        _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
-        """
-
         particle_ranges = []
         angles = np.array(self.subsampled_angles) + yaw # total angle = angle of robot position + laser angle
         sin_angles = np.sin(angles) # sin values of all angles
@@ -275,7 +254,7 @@ class ParticleFilter(object):
         return particle_ranges
 
 
-    def _subsample_laser_scan(self, laser_scan_msg):
+    def _subsample_laser_scan(self, laser_scan_msg): #time = 0.0001
         """
         subsample number of beams from output of laser and set inf to laser_max_range:
             -going through the laser_scan_ranges anti-clockwise (index 0 is right behind robot index 245 is left behind robot)
@@ -295,36 +274,31 @@ class ParticleFilter(object):
 
         
 
-    def _get_prediction_error(self, laser_scan_msg, particle):
+    def _get_prediction_error(self, laser_scan_msg, particle): #time = 0.003
         """
         calculate error of particle from:
         1) diff in robot scan and particle scan 
         2) position of robot is in free space
         """
-
         # high error for particles outside of ogm or within an obstacle
         x_grid, y_grid = self._continous_to_grid(particle.x, particle.y)
         if x_grid < self.xmin or x_grid > self.xmax or y_grid < self.ymin or y_grid > self.ymax or (self.ogm_map[x_grid, y_grid] == 100):
             error = 3000
-            return error
         else:
             # get robot laser_scan and simulated laser_scan from particle to calculate difference of those
             subsampled_ranges = self._subsample_laser_scan(laser_scan_msg)
             particle_ranges = self._get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
-            diff_ranges = []
-            for range_i in range(len(particle_ranges)):
-                diff_ranges.append(abs(subsampled_ranges[range_i]-particle_ranges[range_i]))
-
+            diff_ranges = np.abs(np.array(subsampled_ranges)-np.array(particle_ranges))
             # mean squared error from difference in all eval_beams ranges
             norm_error = np.linalg.norm(diff_ranges)
-            error = pow(norm_error,2)
-            return error
+            error = pow(norm_error,2)   
+        return error
+
                 
-    def handle_odometry(self, odom, last_odom):
+    def handle_odometry(self, odom, last_odom): #time = 0.0001
         """
         calculate relative motion between the last and current odometry measurement
         """
-
         # last and current position and orientation in numpy array
         position = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
         last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
@@ -344,11 +318,10 @@ class ParticleFilter(object):
         self.dy += diff_position[1]
         self.dyaw += yaw_diff
 
-    def _predict_odometry(self, particle):
+    def _predict_odometry(self, particle): #time = 1e-5
         """
         predicts particle according to odometry
         """
-
         # uncertainty which predicts every particle a little different 
         nx = random.gauss(0, self.dynamics_translation_noise_std_dev)
         ny = random.gauss(0, self.dynamics_translation_noise_std_dev)
@@ -375,8 +348,28 @@ class ParticleFilter(object):
 
     def get_position(self):
         max_index = np.argmax(self.weights)
-        x, y, yaw = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
-        return x, y, yaw
+        x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
+        
+        """
+        TODO transform best particle from hokuyo_link to odom link --> since they where sampled according to their laserscan which is represented in hokuyo link
+        self.t = tf.Transformer(True, rospy.Duration(10.0))
+        self.listener = tf.TransformListener()
+        now = rospy.Time.now()
+        self.listener.waitForTransform('/hokuyo_link', '/base_link', now, rospy.Duration(4.0)) 
+        pose_msg = PoseStamped()
+        pose_msg.header.frame_id = '/hokuyo_link'
+        pose_msg.pose.position.x=x_in
+        pose_msg.pose.position.y=y_in
+        q = transform.quaternion_from_euler(0,0,yaw_in)
+        pose_msg.pose.orientation.x = q[0]
+        pose_msg.pose.orientation.y = q[1]
+        pose_msg.pose.orientation.z = q[2]
+        pose_msg.pose.orientation.w = q[3]
+        new_pose = self.listener.transformPose('/base_link', pose_msg)
+        x,y = new_pose.pose.position.x, new_pose.pose.position.y
+        _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
+        """
+        return x_in, y_in, yaw_in
 
 class MonteCarloLocalization(object):
 
@@ -428,6 +421,7 @@ class MonteCarloLocalization(object):
         self.pub_best_particle = rospy.Publisher('/particle', Marker, queue_size=1)
     def laser_scan_callback (self, msg):
         # set min and max range, angle of laser
+        rospy.loginfo("scan")
         self.pf.laser_min_angle = msg.angle_min
         self.pf.laser_max_angle = msg.angle_max
         self.pf.laser_min_range = msg.range_min
@@ -449,7 +443,8 @@ class MonteCarloLocalization(object):
         self.lock.release()
 
     def odometry_callback(self, msg):
-        self.odometry = msg
+        self.odometry = msg 
+        rospy.loginfo("odom")
 
         if self.last_odometry:
             # calculate odometry change of robot
@@ -457,6 +452,8 @@ class MonteCarloLocalization(object):
             self.pf.handle_odometry(self.odometry, self.last_odometry)
             self.lock.release()
         self.last_odometry = self.odometry
+
+
 
     def _publish(self):
         """
