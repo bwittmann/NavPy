@@ -167,9 +167,13 @@ class ParticleFilter(object):
         self.weights = weights_new.copy()
 
         #resample
+        """
+        TODO: adapt variance to error and resample dependent on error --> figure out what is the most efficient
+              also it has an influence whether variance is set to zero when robot is standing still (in function self._predict_odometry)
+        """
         self.dynamics_translation_noise_std_dev=min(max(0.4/sqrt(sum(weights_not_normalized)), 0.04),0.4)
-        rospy.loginfo((sum(weights_not_normalized),min(max(0.5/sqrt(sum(weights_not_normalized)), 0.05),0.5)))
-        self._resample()
+        if sum(weights_not_normalized) <30:
+            self._resample()
         
 
     def _resample(self): #time = 0.0003
@@ -336,10 +340,13 @@ class ParticleFilter(object):
         nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev)
 
         # don't let uncertainty dominate prdiction (when robot does not move, the uncertainty should not move the particles randomly in space)
+        """
+        TODO: if resampling just for specific errors this is not needed anymore --> when standing still error is small --> no resampling 
         if abs(self.dx) < 0.00005 and abs(self.dy) < 0.00005 and abs(self.dyaw) < 0.00005:
             nx*=0.1
             ny*=0.1
             nyaw*=0.1
+        """
 
         # predict particle according to odometry with a little uncertainty
         x_new = particle.x + self.dx + nx
