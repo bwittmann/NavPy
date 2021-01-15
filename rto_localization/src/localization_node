@@ -8,7 +8,7 @@ from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import TransformStamped, PoseStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
-from math import cos, sin, pi, inf, exp
+from math import cos, sin, pi, inf, exp, sqrt
 from threading import Lock
 import random
 import numpy as np
@@ -120,10 +120,13 @@ class ParticleFilter(object):
 
         while True:
 
-            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.99, -self.ogm.map.info.origin.position.x*1.01)
-            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.99, -self.ogm.map.info.origin.position.y*1.01)
+            #x=np.random.uniform(0,self.xmax*self.resolution)
+            #y=np.random.uniform(0,self.ymax*self.resolution)
+            #yaw=np.random.uniform(-2*pi,2*pi)
+            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.7, -self.ogm.map.info.origin.position.x*1.3)
+            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.7, -self.ogm.map.info.origin.position.y*1.3)
             _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
-            yaw = np.random.uniform(-yaw_map*0.99, -yaw_map*1.01)
+            yaw = np.random.uniform(-yaw_map*0.7, -yaw_map*1.3)
             
             # check if x,y position is not within an obstacle
             x_grid, y_grid = self._continous_to_grid(x,y)
@@ -164,6 +167,8 @@ class ParticleFilter(object):
         self.weights = weights_new.copy()
 
         #resample
+        self.dynamics_translation_noise_std_dev=min(max(0.4/sqrt(sum(weights_not_normalized)), 0.04),0.4)
+        rospy.loginfo((sum(weights_not_normalized),min(max(0.5/sqrt(sum(weights_not_normalized)), 0.05),0.5)))
         self._resample()
         
 
