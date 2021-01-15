@@ -443,7 +443,7 @@ class Bidirectional_Astar_Planner():
                 path = self.Path_argument(path)
 
                 # return path
-                return path
+                return path[::-1]
 
 class main():
     """
@@ -453,9 +453,9 @@ class main():
     def __init__(self):
 
         # Initialize Subscribers
-        # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
         # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
         self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
+        self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -481,15 +481,6 @@ class main():
         self.msg_path_marker.color.b = 1.0
         self.msg_path_marker.pose.orientation = Quaternion(0, 0, 0, 1)
 
-    # Wait for amcl part to provide it with initial position
-    # def callback_pos(self, PoseWithCovarianceStamped):
-    #     """
-    #     callback of position
-    #     """
-    #     self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x + 3.246519) / 0.05)
-    #     self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y + 3.028618) / 0.05)
-    #     print(PoseWithCovarianceStamped.pose.pose.position)
-
     def callback_costmap(self, OccupancyGrid):
         """
         callback of costmap
@@ -502,6 +493,18 @@ class main():
         self.origin = OccupancyGrid.info.origin.position
         self.resolution = OccupancyGrid.info.resolution
 
+    # Wait for amcl part to provide it with initial position
+    def callback_pos(self, PoseWithCovarianceStamped):
+        """
+        callback of position
+        """
+        rospy.wait_for_message('/global_costmap', OccupancyGrid)
+        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / self.resolution)
+        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / self.resolution)
+        # self.posx = PoseWithCovarianceStamped.pose.pose.position.x
+        # self.posy = PoseWithCovarianceStamped.pose.pose.position.y
+        # print(self.posx, self.posy)
+
     def callback_goal(self, PoseStamped):
         """
         callback of goal
@@ -509,6 +512,8 @@ class main():
         # shift position to position in map
         self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
         self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
+        # print(PoseStamped.pose.position.x, PoseStamped.pose.position.y)
+        # print('goal is ',self.goal_x, self.goal_y)
 
     def check_valid(self, goalx, goaly):
         """
@@ -533,9 +538,10 @@ class main():
 
             # initialize start node
             #TODO:replace initial position using amcl
-            self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
-            self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
+            # self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
+            # self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
             start = (self.pos_x, self.pos_y)
+            # print('start is ',self.posx, self.posy)
 
             if self.check_valid(self.goal_x, self.goal_y):
 
@@ -545,8 +551,8 @@ class main():
                 # publish path
                 for pa in path:
                     pose = PoseStamped()
-                    pose.pose.position.x = pa[0] * self.resolution + self.origin.x
-                    pose.pose.position.y = pa[1] * self.resolution + self.origin.y
+                    pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
+                    pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
                     self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
                     self.msg_path.poses.append(pose)
                 self.pub_plan.publish(self.msg_path_marker)
@@ -564,4 +570,4 @@ if __name__ == "__main__":
    rospy.init_node('rto_global_planner')
 
    main = main()
-   main.run(rate=1)
+   main.run(rate=10)
