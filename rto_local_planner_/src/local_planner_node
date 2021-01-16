@@ -8,7 +8,7 @@ import tf
 from threading import Lock, Thread
 from nav_msgs.msg import Odometry, Path, OccupancyGrid
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped
-from sensor_msgs.msg import LaserScan 
+from sensor_msgs.msg import LaserScan, PointCloud 
 
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
@@ -58,7 +58,6 @@ class DWALocalPlanner():
         self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
-        #self.odometry_pose = rospy.get_param('~odometry_pose')
         self.lookahead = rospy.get_param('~lookahead')
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
@@ -67,11 +66,14 @@ class DWALocalPlanner():
         self.listener = tf.TransformListener()
         self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
 
+        # Setup PoseStamped for transformation of points from frame /odom to /map
+        self.pose = PoseStamped()
+        self.pose.header.frame_id= '/odom'
+
         # Init subscriptions
         rospy.Subscriber('/odom', Odometry, self._cb_current_twist_and_pose)
         rospy.Subscriber('/global_path', Path, self._cb_global_path)
-        rospy.Subscriber('/local_costmap', OccupancyGrid, self._cb_local_costmap)
-
+        rospy.Subscriber('/local_obstacles', PointCloud, self._cb_local_obstacles)
 
         # Init publisher
         self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
@@ -83,10 +85,6 @@ class DWALocalPlanner():
         self.twist.angular.x = 0
         self.twist.angular.y = 0
 
-        # Setup PoseStamped for transformation of points from frame /odom to /map
-        self.pose = PoseStamped()
-        self.pose.header.frame_id= '/odom'
- 
         # Init instance variables
         self.dt = 1/freq
         self.current_pose = (0, 0, 0)
@@ -95,7 +93,9 @@ class DWALocalPlanner():
         self.follow_plan = False
 
     def _cb_current_twist_and_pose(self, msg):
+        #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))  #TODO: seems to be enought to state in init method
         self.lock.acquire()
+
         # Transform robot pose to from /odom to /map frame 
         self.pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
         self.pose.pose.position = msg.pose.pose.position
@@ -122,9 +122,9 @@ class DWALocalPlanner():
         rospy.loginfo('Local planner reveived a global path')
 
 
-    def _cb_local_costmap(self, msg):
+    def _cb_local_obstacles(self, msg):
         self.lock.acquire()
-        self.local_costmap = np.array(msg.data).reshape(msg.info.height, msg.info.width)
+        self.obstacles = msg.points # TODO: try to reduce redundant scan points
         self.lock.release()
 
 
@@ -132,7 +132,7 @@ class DWALocalPlanner():
     def _euclidean_distance(point1, point2=(0,0)):
         return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
 
-    
+
     # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
     def _get_dynamic_window(self, lin_vel, ang_vel):
         dt = self.lookahead
@@ -185,13 +185,11 @@ class DWALocalPlanner():
             yawn = yaw + self.lookahead * w  
         return (xn, yn, yawn)
 
-
     def _check_goal_reached(self, robot_state, path):
         if self._euclidean_distance(robot_state[:2], path[-1]) < self.min_dist_goal:
             return True
         else:
             return False
-
 
     @timed
     def _get_cost(self, control_pair, robot_state, path, show_costs=False):
@@ -210,12 +208,10 @@ class DWALocalPlanner():
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
             self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
 
-
     # DONE
     def _get_vel_cost(self, lin_vel):
         cost_vel = ((self.max_lin_vel - self.min_lin_vel) - lin_vel) / (self.max_lin_vel - self.min_lin_vel)
         return cost_vel
-
 
     # DONE
     def _get_angle_to_goal_cost(self, new_state, control_pair, goal):
@@ -224,7 +220,6 @@ class DWALocalPlanner():
         angle = np.arctan2((yg-yn), (xg-xn)) - yawn
         cost_angle_to_goal = abs(np.arctan2(np.sin(angle), np.cos(angle))) / np.pi
         return cost_angle_to_goal
-
 
     # DONE
     # drift of a couple of cm maybe coming from conversion of grid elements to meters
@@ -239,6 +234,7 @@ class DWALocalPlanner():
             return min_dist_to_path
 
 
+
     # TODO: Implement
     def _get_prox_to_obst_cost(self):
         return 0
@@ -247,7 +243,6 @@ class DWALocalPlanner():
 
     def run(self):
         while not rospy.is_shutdown():
-            #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
             start = time.time()
 
             # To avoid problem that follow_plan get set to True via a new plan and instantly gets 
@@ -267,6 +262,9 @@ class DWALocalPlanner():
             # Get current state
             robot_state = self.current_pose
 
+            # Get current obstacles
+            obstacles = self.obstacles
+
             # Get dynamic window
             Vd = self._get_dynamic_window(lin_vel, ang_vel)
 
@@ -283,17 +281,13 @@ class DWALocalPlanner():
 
             # TODO: Exclude unfeasible trajectories
 
-            #print(self.local_costmap.shape)
-
             if self.debug_mode == True:
                 print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
                 print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, True))
-                #print(robot_state)
+                print('current pos: ', robot_state)
                 #print(self.global_path)
                 print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
                 print('----------------------')
-
-
 
             # Publish velocity commands
             if self.follow_plan == True:
@@ -313,8 +307,8 @@ class DWALocalPlanner():
             if self.log_times == True:
                 rospy.loginfo("Local planner: Loop of method 'run' took {}s".format(str(np.round(end - start, 4))))
 
-
-            rospy.sleep(self.dt)
+            # To ensure that desired frequency does not get affected by computation time.
+            rospy.sleep(self.dt - end + start)
 
 
 
@@ -325,6 +319,24 @@ if __name__ == '__main__':
 
     local_planner = DWALocalPlanner(10)
     local_planner.run()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

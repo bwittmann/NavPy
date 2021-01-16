@@ -2,10 +2,7 @@
 log_times: False
 
 # Return messages to the terminal that are relevant for debugging
-debug_mode: False
-
-# Use the pose of the odometry message for position estimation
-odometry_pose: True #NOT NEEDED ANYMORE
+debug_mode: True
 
 # Lookahead for motion update
 lookahead: 2.5
