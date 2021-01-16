@@ -10,9 +10,9 @@ import tf
 from threading import Thread, Lock
 from nav_msgs.msg import OccupancyGrid, Odometry
 from rto_map_server.srv import GetMap
-from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped, PoseStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Point, PoseStamped
 from rto_costmap_generator.srv import SwitchMaps
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud
 
 # global costmap
 # TODO: Increase performance of _padd_static_map() -> constructing mask takes most of the time
@@ -77,7 +77,6 @@ class CostmapGenerator():
 
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
-        self.odometry_pose = rospy.get_param('~odometry_pose')
 
         self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
              rospy.get_param('~global_costmap')['safety_distance']      # Unit: m
@@ -93,6 +92,7 @@ class CostmapGenerator():
         # Init publisher
         self.pub_global_costmap = rospy.Publisher('/global_costmap', OccupancyGrid, queue_size=10 ,latch=True)
         self.pub_local_costmap = rospy.Publisher('/local_costmap', OccupancyGrid, queue_size=10 ,latch=False)
+        self.pub_local_obstacles = rospy.Publisher('/local_obstacles', PointCloud, queue_size=10 ,latch=False)
 
         # Get static map from map server via request to service 'get_map'
         self._call_get_map_srv()
@@ -121,7 +121,7 @@ class CostmapGenerator():
         self.static_map.header.stamp = rospy.Time.now()
         self.pub_global_costmap.publish(self.static_map)
 
-        # Estimate length of the grid map in grid cells
+        # Estimate length of local_costmap in grid cells
         lc_grid_length = int(np.round((self.lc_length / self.static_map.info.resolution), 0))
         # Number has to be uneven so that robot will be located in exactelly the middle
         if lc_grid_length % 2 == 0:
@@ -133,16 +133,10 @@ class CostmapGenerator():
 
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
-
-        if self.odometry_pose == False:
-            rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._cb_current_pose)
-        else:
-            rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
-
+        rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
-        self.local_costmap.header.stamp = rospy.Time.now()
         self.local_costmap.header.frame_id = 'map'  # should be map frame here
         self.local_costmap.info.resolution = self.static_map.info.resolution
         self.local_costmap.info.height = lc_grid_length
@@ -159,11 +153,11 @@ class CostmapGenerator():
         self.listener = tf.TransformListener()
 
 
-
     def _cb_current_pose(self, msg):
-        self.record = True
+        self.record = True  # TODO: necessay?
 
-        self.listener.waitForTransform('odom', 'map', rospy.Time(0), rospy.Duration(10))
+        # Transform robot pose to from /odom to /map frame 
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10))
         msg_new = PoseStamped()
         msg_new.pose.position = msg.pose.pose.position
         msg_new.pose.orientation = msg.pose.pose.orientation
@@ -178,8 +172,6 @@ class CostmapGenerator():
         self.current_pose = (msg.pose.position.x, msg.pose.position.y, euler[2])
         self.lock.release()
 
-        #print('new message income')
-
         rospy.sleep(1/(self.lc_freq_scan - 1)) # To ensure that pose and scan msgs are alligned.
         self.record = False
 
@@ -188,7 +180,6 @@ class CostmapGenerator():
             self.lock.acquire()
             self.scan = msg
             self.lock.release()
-
 
     def _call_get_map_srv(self):
         """
@@ -206,7 +197,6 @@ class CostmapGenerator():
             rospy.logerr("Costmap generator could not receive map from map server.")
             return False
 
-
     @threaded
     def _start_switchmaps_service(self):
         """
@@ -214,7 +204,6 @@ class CostmapGenerator():
         """
         rospy.Service('switch_maps', SwitchMaps, self._handle_switch_maps)
         rospy.spin()
-
 
     def _handle_switch_maps(self, req):
         """
@@ -235,7 +224,6 @@ class CostmapGenerator():
             self.pub_global_costmap.publish(self.static_map)
 
         return success
-
 
     @timed
     def _padd_static_map(self):
@@ -273,72 +261,105 @@ class CostmapGenerator():
         self.static_map.data = global_costmap.ravel()
 
 
-    # TODO: Finish
-    def generate_local_costmap(self):
+    # TODO: fix the offset between global costmap and static map
+    def generate_local_costmap_and_obstacles(self):
 
-        self.listener.waitForTransform('hokuyo_link', 'base_link', rospy.Time(0), rospy.Duration(10))
+        rospy.wait_for_message('/scan', LaserScan)
+
+        # Initilize point cloud for transformations of obstacles
+        pointcloud_hokuyo = PointCloud()
+        pointcloud_hokuyo.header.frame_id = 'hokuyo_link'
+
+        # Initilize point cloud for transformations regarding local map
+        pointcloud_local_costmap = PointCloud()
+        pointcloud_local_costmap.header.frame_id = 'hokuyo_link'
+    
+        # Set robot position to the middle of the grid map
+        local_costmap_middle = int(self.local_costmap.info.height/2)
+        robot_pos = (local_costmap_middle, local_costmap_middle)
+
 
         while not rospy.is_shutdown():
+            start = time.time()
+
             # Get current values from subscribed topics
-            ranges = self.scan.ranges
+            ranges = self.scan.ranges   # TODO: appears to have no self.scan sometimes.
             current_pose = self.current_pose
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
 
+            # Update stamp message of stamped point
+            pointcloud_hokuyo.header.stamp = rospy.Time.now()
+ 
+            # Clear local_obstacle point cloud
+            pointcloud_hokuyo.points.clear()
+            pointcloud_local_costmap.points.clear()
 
-            # Create PointStamped message for transformation between frames
-            point_hokuyo_frame = PointStamped()
-            point_hokuyo_frame.header.frame_id = 'hokuyo_link'
-            point_hokuyo_frame.header.stamp = rospy.Time.now()
-            point_hokuyo_frame.point.z = 0
-
-            # Set robot position to the middle of the grid map
-            local_costmap_middle = int(self.local_costmap.info.height/2)
-            robot_pos = (local_costmap_middle, local_costmap_middle)
-
+            # Clear local costmap
             local_costmap = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8)
 
-            for idx, element in enumerate(ranges):
-
-                # TODO: Somehow transform to baselink, before? necessary?
-
+            for idx, element in enumerate(ranges):  # TODO: Think if it makes sense to transform to base_link before.
                 # Check if element would be in local_costmap
-                if element < self.lc_length/2: #np.sqrt(2*(self.lc_length/2)**2):
+                if element < self.lc_length/2:
                     angle = min_angle + idx * angle_inc
 
-                    # Get offset to laser sensor ('hokuyo_link' frame) in map frame
-                    dx = np.cos(np.pi/2 - (angle + current_pose[2])) * element
-                    dy = np.sin(np.pi/2 - (angle + current_pose[2])) * element
+                    # Get offset to laser sensor ('hokuyo_link' frame) in map frame (kind of)
+                    dx_local_map = np.cos(np.pi/2 - (angle + current_pose[2])) * element
+                    dy_local_map = np.sin(np.pi/2 - (angle + current_pose[2])) * element      # TODO: problem for local costmap
 
-                    point_hokuyo_frame.point.x = dx
-                    point_hokuyo_frame.point.y = dy
+                    dx = np.cos(np.pi/2 - angle) * element
+                    dy = np.cos(np.pi/2 - angle) * element
 
-                    # Get transform point into 'base_link' frame
-                    point_base_frame = self.listener.transformPoint('base_link', point_hokuyo_frame)
+                    point_hokuyo_frame = Point()
+                    point_hokuyo_frame.x = dx
+                    point_hokuyo_frame.y = dy
+                    point_hokuyo_frame.z = 0
 
-                    point = (int(np.round(point_base_frame.point.x / self.local_costmap.info.resolution, 0)), \
-                        int(np.round(point_base_frame.point.y / self.local_costmap.info.resolution, 0)))
+                    point_local_costmap = Point()
+                    point_local_costmap.x = dx_local_map
+                    point_local_costmap.y = dy_local_map
+                    point_local_costmap.z = 0
 
-                    # Mark sensed cells as occupied.
-                    try:
-                        local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100
-                    except:
-                        pass
+                    pointcloud_hokuyo.points.append(point_hokuyo_frame)
+                    pointcloud_local_costmap.points.append(point_local_costmap)
 
+            
+            # Get transform point cloud into 'map' frame
+            self.listener.waitForTransform('/hokuyo_link', '/base_link', rospy.Time(0), rospy.Duration(10))
+            pointcloud_local_costmap = self.listener.transformPointCloud('/base_link', pointcloud_local_costmap)
+            pointcloud_base_link = self.listener.transformPointCloud('/base_link', pointcloud_hokuyo)
 
+            self.listener.waitForTransform('/odom', '/base_link', rospy.Time(0), rospy.Duration(10))
+            pointcloud_odom = self.listener.transformPointCloud('/base_link', pointcloud_base_link)
 
+            self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10))
+            pointcloud_map = self.listener.transformPointCloud('/base_link', pointcloud_odom)
 
-                    #print(point)
-            #print('---------------------------------')
+            # Add point that has been transformed to base_link to local costmap.
+            for point in pointcloud_local_costmap.points:
+                point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
+                    int(np.round(point.y / self.local_costmap.info.resolution, 0)))
+  
+                try:
+                    local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100
+                except:
+                    pass
 
 
             # Publish local_costmap with robot in its center
+            self.local_costmap.header.stamp = rospy.Time.now()
             self.local_costmap.info.origin.position.x = current_pose[0] - self.lc_length / 2
             self.local_costmap.info.origin.position.y = current_pose[1] - self.lc_length / 2
             self.local_costmap.data = local_costmap.ravel()
             self.pub_local_costmap.publish(self.local_costmap)
 
-            rospy.sleep(1/self.lc_freq)
+            # Publish local_obstacles
+            self.pub_local_obstacles.publish(pointcloud_map)
+
+            end = time.time()
+            print(end - start)
+            # To ensure that desired frequency does not get affected by computation time.
+            rospy.sleep((1/self.lc_freq) - end + start)
 
 
 if __name__ == "__main__":
@@ -349,4 +370,4 @@ if __name__ == "__main__":
     log_times = rospy.get_param('~log_times')
 
     costmap_gen = CostmapGenerator()
-    costmap_gen.generate_local_costmap()
+    costmap_gen.generate_local_costmap_and_obstacles()
