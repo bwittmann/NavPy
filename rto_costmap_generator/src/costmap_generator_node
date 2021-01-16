@@ -288,8 +288,11 @@ class CostmapGenerator():
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
 
+            '''
             # Update stamp message of stamped point
             pointcloud_hokuyo.header.stamp = rospy.Time.now()
+            pointcloud_local_costmap.header.stamp = rospy.Time.now()
+            '''
  
             # Clear local_obstacle point cloud
             pointcloud_hokuyo.points.clear()
@@ -307,7 +310,7 @@ class CostmapGenerator():
                     dx_local_map = np.cos(np.pi/2 - (angle + current_pose[2])) * element
                     dy_local_map = np.sin(np.pi/2 - (angle + current_pose[2])) * element      # TODO: problem for local costmap
 
-                    dx = np.cos(np.pi/2 - angle) * element
+                    dx = np.cos(angle) * element
                     dy = np.cos(np.pi/2 - angle) * element
 
                     point_hokuyo_frame = Point()
@@ -324,27 +327,29 @@ class CostmapGenerator():
                     pointcloud_local_costmap.points.append(point_local_costmap)
 
             
-            # Get transform point cloud into 'map' frame
+            # Transform point cloud into 'map' frame
             self.listener.waitForTransform('/hokuyo_link', '/base_link', rospy.Time(0), rospy.Duration(10))
+            pointcloud_hokuyo.header.stamp = self.listener.getLatestCommonTime('/hokuyo_link', '/base_link')
+            pointcloud_local_costmap.header.stamp = self.listener.getLatestCommonTime('/hokuyo_link', '/base_link')
             pointcloud_local_costmap = self.listener.transformPointCloud('/base_link', pointcloud_local_costmap)
             pointcloud_base_link = self.listener.transformPointCloud('/base_link', pointcloud_hokuyo)
 
             self.listener.waitForTransform('/odom', '/base_link', rospy.Time(0), rospy.Duration(10))
-            pointcloud_odom = self.listener.transformPointCloud('/base_link', pointcloud_base_link)
+            pointcloud_base_link.header.stamp = self.listener.getLatestCommonTime('/base_link', '/odom')
+            pointcloud_odom = self.listener.transformPointCloud('/odom', pointcloud_base_link)
 
             self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10))
-            pointcloud_map = self.listener.transformPointCloud('/base_link', pointcloud_odom)
+            pointcloud_odom.header.stamp = self.listener.getLatestCommonTime('/odom', '/map')
+            pointcloud_map = self.listener.transformPointCloud('/map', pointcloud_odom)
 
             # Add point that has been transformed to base_link to local costmap.
             for point in pointcloud_local_costmap.points:
                 point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
                     int(np.round(point.y / self.local_costmap.info.resolution, 0)))
-  
                 try:
                     local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100
                 except:
                     pass
-
 
             # Publish local_costmap with robot in its center
             self.local_costmap.header.stamp = rospy.Time.now()
@@ -357,7 +362,6 @@ class CostmapGenerator():
             self.pub_local_obstacles.publish(pointcloud_map)
 
             end = time.time()
-            print(end - start)
             # To ensure that desired frequency does not get affected by computation time.
             rospy.sleep((1/self.lc_freq) - end + start)
 
