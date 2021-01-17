@@ -1,8 +1,8 @@
 # To log execution times of time critical operations
-log_times: False
+log_times: True
 
 # Return messages to the terminal that are relevant for debugging
-debug_mode: True
+debug_mode: False
 
 # Lookahead for motion update
 lookahead: 2.5
