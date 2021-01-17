@@ -288,12 +288,6 @@ class CostmapGenerator():
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
 
-            '''
-            # Update stamp message of stamped point
-            pointcloud_hokuyo.header.stamp = rospy.Time.now()
-            pointcloud_local_costmap.header.stamp = rospy.Time.now()
-            '''
- 
             # Clear local_obstacle point cloud
             pointcloud_hokuyo.points.clear()
             pointcloud_local_costmap.points.clear()
