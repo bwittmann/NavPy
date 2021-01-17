@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Maps1
         - /Sensors_Distance1/LaserDistance1
       Splitter Ratio: 0.5
     Tree Height: 413
@@ -162,7 +163,7 @@ Visualization Manager:
           Draw Behind: false
           Enabled: true
           Name: Costmap_Local
-          Topic: /move_base/local_costmap/costmap
+          Topic: /local_costmap
           Unreliable: false
           Use Timestamp: false
           Value: true
