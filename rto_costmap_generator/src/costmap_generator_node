@@ -158,12 +158,20 @@ class CostmapGenerator():
         # Init tf listener
         self.listener = tf.TransformListener()
 
-
+    def get_tf_map_odom(self):
+        '''
+        This function is used to get realtime tf transform information
+        '''
+        try:
+            self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10.0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logerr("Failed to recieve the transform for map to odom")
 
     def _cb_current_pose(self, msg):
         self.record = True
 
-        self.listener.waitForTransform('odom', 'map', rospy.Time(0), rospy.Duration(10))
+        self.get_tf_map_odom()
+
         msg_new = PoseStamped()
         msg_new.pose.position = msg.pose.pose.position
         msg_new.pose.orientation = msg.pose.pose.orientation
@@ -272,14 +280,21 @@ class CostmapGenerator():
 
         self.static_map.data = global_costmap.ravel()
 
+    def get_tf_hokuyo_base(self):
+        '''
+        This function is used to get realtime tf transform information
+        '''
+        try:
+            self.listener.waitForTransform('/hokuyo_link', '/base_link', rospy.Time(0), rospy.Duration(10.0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logerr("Failed to recieve the transform for hokuyo_link to base_link")
 
     # TODO: Finish
     def generate_local_costmap(self):
 
-        self.listener.waitForTransform('hokuyo_link', 'base_link', rospy.Time(0), rospy.Duration(10))
-
         while not rospy.is_shutdown():
             # Get current values from subscribed topics
+            rospy.wait_for_message('/scan', LaserScan)
             ranges = self.scan.ranges
             current_pose = self.current_pose
             min_angle = self.scan.angle_min
@@ -287,6 +302,7 @@ class CostmapGenerator():
 
 
             # Create PointStamped message for transformation between frames
+            self.get_tf_hokuyo_base()
             point_hokuyo_frame = PointStamped()
             point_hokuyo_frame.header.frame_id = 'hokuyo_link'
             point_hokuyo_frame.header.stamp = rospy.Time.now()

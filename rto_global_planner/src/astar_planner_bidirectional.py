@@ -455,7 +455,7 @@ class main():
         # Initialize Subscribers
         # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
         self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
-        self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
+        self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
@@ -494,13 +494,15 @@ class main():
         self.resolution = OccupancyGrid.info.resolution
 
     # Wait for amcl part to provide it with initial position
-    def callback_pos(self, PoseWithCovarianceStamped):
+    def callback_pos(self, PoseStamped):
         """
         callback of position
         """
         rospy.wait_for_message('/global_costmap', OccupancyGrid)
-        self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / self.resolution)
-        self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / self.resolution)
+        # self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / self.resolution)
+        # self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / self.resolution)
+        self.pos_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
+        self.pos_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
         # self.posx = PoseWithCovarianceStamped.pose.pose.position.x
         # self.posy = PoseWithCovarianceStamped.pose.pose.position.y
         # print(self.posx, self.posy)
