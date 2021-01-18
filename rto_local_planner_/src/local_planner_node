@@ -51,6 +51,8 @@ class DWALocalPlanner():
         self.min_ang_vel = rospy.get_param('~min_angular_vel')
         self.max_ang_vel = rospy.get_param('~max_angular_vel')
         self.max_acc = rospy.get_param('~max_acc')
+        self.max_dec = rospy.get_param('~max_dec')
+        self.min_distance = rospy.get_param('~robot_diameter')/2
         self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
         self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
         self.gain_vel = rospy.get_param('~gain_vel')
@@ -61,6 +63,7 @@ class DWALocalPlanner():
         self.lookahead = rospy.get_param('~lookahead')
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
+        
         
         # Init tf listener
         self.listener = tf.TransformListener()
@@ -90,6 +93,7 @@ class DWALocalPlanner():
         self.current_pose = (0, 0, 0)
         self.current_twist = (0, 0, 0)
         self.global_path = np.array([[0, 0], [0, 0]])
+        self.obstacles = []
         self.follow_plan = False
 
     def _cb_current_twist_and_pose(self, msg):
@@ -121,12 +125,15 @@ class DWALocalPlanner():
         self.lock.release()
         rospy.loginfo('Local planner reveived a global path')
 
-
+    # TODO: try to reduce redundant scan points
+    # TODO: try to make conversion more efficient
     def _cb_local_obstacles(self, msg):
         self.lock.acquire()
-        self.obstacles = msg.points # TODO: try to reduce redundant scan points
+        obstacles = []
+        for point in msg.points:
+            obstacles.append((point.x, point.y))
+        self.obstacles = np.array(obstacles)
         self.lock.release()
-
 
     @staticmethod
     def _euclidean_distance(point1, point2=(0,0)):
@@ -186,14 +193,14 @@ class DWALocalPlanner():
             return (xn, yn, yawn), traj
         else:
             r = v/w
-            dx_partial = -r * np.sin(yaw) #+ (v/w) * np.sin(yaw + w * dt)
-            dy_partial = r * np.cos(yaw) #- (v/w) * np.cos(yaw + w * dt)
+            dx_partial = -r * np.sin(yaw) #+ (v/w) * np.sin(yaw + w * dt) -> dx
+            dy_partial = r * np.cos(yaw) #- (v/w) * np.cos(yaw + w * dt) -> dy
             yawn = yaw + self.lookahead * w
 
             for step in range(1, traj_resolution + 1):
-                traj.append((x + dx_partial + r * np.sin(yaw + w * dt * step), y + dy_partial - r * np.cos(yaw + w * dt * step)))
+                yawn_calc = yaw + w * dt * step
+                traj.append((x + dx_partial + r * np.sin(yawn_calc), y + dy_partial - r * np.cos(yawn_calc)))
             xn, yn = traj[-1]
-
             return (xn, yn, yawn), traj
 
     def _check_goal_reached(self, robot_state, path):
@@ -211,7 +218,7 @@ class DWALocalPlanner():
         cost_vel = self._get_vel_cost(lin_vel)
         cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
         cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
-        cost_prox_to_obst = self._get_prox_to_obst_cost(traj, obstacles)
+        cost_prox_to_obst = self._get_prox_to_obst_cost(traj, control_pair, obstacles)
 
         if show_costs == True:
             print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
@@ -246,8 +253,30 @@ class DWALocalPlanner():
 
 
     # TODO: Implement
-    def _get_prox_to_obst_cost(self, traj, obstacles):
-        return 0
+    # TODO: Exclude unfeasible trajectories
+    def _get_prox_to_obst_cost(self, traj, control_pair, obstacles):
+        # Include the break distance according to the current linear velocity
+        threshold = self.min_distance + (control_pair[1]**2)/(2*self.max_dec)
+
+        traj = np.array(traj)
+        traj_x, traj_y = traj[:, 0].reshape((-1, 1)), traj[:, 1].reshape((-1, 1))
+
+        try:
+            obst_x, obst_y = obstacles[:, 0], obstacles[:, 1]
+        except IndexError:
+            return 0
+
+        distance_x = traj_x - obst_x  
+        distance_y = traj_y - obst_y
+
+        distance = np.sqrt(distance_x**2 + distance_y**2)
+        min_distance_measured = np.min(distance)
+
+        if min_distance_measured < threshold:
+            return np.inf
+        else:
+            return 1/min_distance_measured
+
 
 
 
@@ -261,7 +290,6 @@ class DWALocalPlanner():
                 rospy.sleep(self.dt)
                 continue
 
-            
             # Get current velocity values
             lin_vel = self.current_twist[0]
             ang_vel = self.current_twist[2]
@@ -274,7 +302,7 @@ class DWALocalPlanner():
 
             # Get current obstacles
             obstacles = self.obstacles
-            #print(obstacles)
+            
 
             # Get dynamic window
             Vd = self._get_dynamic_window(lin_vel, ang_vel)
@@ -289,8 +317,6 @@ class DWALocalPlanner():
                         lowest_cost = cost
                         best_pair = (i,j)
 
-
-            # TODO: Exclude unfeasible trajectories
 
             if self.debug_mode == True:
                 print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
