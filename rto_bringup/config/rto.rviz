@@ -162,7 +162,7 @@ Visualization Manager:
           Draw Behind: false
           Enabled: true
           Name: Costmap_Local
-          Topic: /move_base/local_costmap/costmap
+          Topic: /local_costmap
           Unreliable: false
           Use Timestamp: false
           Value: true
@@ -391,6 +391,10 @@ Visualization Manager:
       Transport Hint: compressed
       Unreliable: false
       Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /visualization/local_path
+      Name: Local_path
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /visualization/plan
