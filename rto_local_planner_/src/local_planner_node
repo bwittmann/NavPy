@@ -7,8 +7,9 @@ import tf
 
 from threading import Lock, Thread
 from nav_msgs.msg import Odometry, Path, OccupancyGrid
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped
-from sensor_msgs.msg import LaserScan, PointCloud 
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Quaternion, Point
+from sensor_msgs.msg import LaserScan, PointCloud
+from visualization_msgs.msg import Marker
 
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
@@ -63,7 +64,8 @@ class DWALocalPlanner():
         self.lookahead = rospy.get_param('~lookahead')
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
-        
+        self.show_local_path = rospy.get_param('~show_path')
+
         
         # Init tf listener
         self.listener = tf.TransformListener()
@@ -80,6 +82,21 @@ class DWALocalPlanner():
 
         # Init publisher
         self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.pub_local_path = rospy.Publisher('/visualization/local_path', Marker, queue_size=10)
+
+        # Setup marker for visualization of local path
+        self.local_plan_marker = Marker()
+        self.local_plan_marker.header.frame_id = 'map'
+        self.local_plan_marker.ns = 'navigation'
+        self.local_plan_marker.id = 0
+        self.local_plan_marker.type = Marker.LINE_STRIP
+        self.local_plan_marker.action = Marker.ADD
+        self.local_plan_marker.scale.x = 0.05
+        self.local_plan_marker.color.a = 0.5
+        self.local_plan_marker.color.r = 0.0
+        self.local_plan_marker.color.g = 1.0
+        self.local_plan_marker.color.b = 0.4
+        self.local_plan_marker.pose.orientation = Quaternion(0, 0, 0, 1)
   
         # Setup Twist message for publishing cmd_vel
         self.twist = Twist()
@@ -218,11 +235,11 @@ class DWALocalPlanner():
         cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
         cost_prox_to_obst = self._get_prox_to_obst_cost(traj, control_pair, obstacles)
         if show_costs == True:
-            print(cost_prox_to_obst)
-            #print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
+            #print(cost_prox_to_obst)
+            print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
         
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
-            self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
+            self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst), traj
 
     # DONE
     def _get_vel_cost(self, lin_vel):
@@ -240,6 +257,7 @@ class DWALocalPlanner():
     # DONE
     # drift of a couple of cm maybe coming from conversion of grid elements to meters
     # TODO: look at last rows of method
+    # TODO: publish on topic if robot is off from path to make adaption of global costmap possible
     def _get_prox_to_path_cost(self, new_state, path):
         diff = path - new_state[0:2]
         euc_distances = np.sqrt(np.power(diff[:, 0], 2) + np.power(diff[:, 1], 2))
@@ -277,8 +295,6 @@ class DWALocalPlanner():
             return 1/min_distance_measured
 
 
-
-
     def run(self):
         while not rospy.is_shutdown():
             start = time.time()
@@ -309,15 +325,23 @@ class DWALocalPlanner():
             lowest_cost = np.inf
             for i in range(self.res_lin_vel_space):
                 for j in range(self.res_ang_vel_space):
-                    cost = self._get_cost(Vd[i,j], robot_state, global_path, obstacles)
+                    cost, traj = self._get_cost(Vd[i,j], robot_state, global_path, obstacles)
                     if cost < lowest_cost:
                         lowest_cost = cost
                         best_pair = (i,j)
+                        best_traj = traj
+
+
+            if self.show_local_path == True:
+                self.local_plan_marker.points.clear()
+                for point in best_traj:
+                    self.local_plan_marker.points.append(Point(point[0] , point[1], 0))
+                self.pub_local_path.publish(self.local_plan_marker)
 
 
             if self.debug_mode == True:
                 print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
-                print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, obstacles, True))
+                print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, obstacles, True)[0])
                 print('current pos: ', robot_state)
                 #print(self.global_path)
                 #print(self._check_goal_reached(robot_state, global_path), self.follow_plan)

@@ -4,6 +4,8 @@ log_times: False
 # Return messages to the terminal that are relevant for debugging
 debug_mode: True
 
+show_path: True
+
 # Lookahead for motion update
 lookahead: 2.5
 
@@ -12,8 +14,8 @@ robot_diameter: 0.45
 # Min and max velocity values of the rto (Unit: m/s, rad/s)
 min_linear_vel: 0 # think about negative values 
 max_linear_vel: 0.2
-min_angular_vel: -0.7 #changed for testing purpose
-max_angular_vel: 0.7
+min_angular_vel: -1 #changed for testing purpose
+max_angular_vel: 1
 
 # Max acceleration and deceleration that can be achieved by the rto (Unit: m/s^2 / rad/s^2)
 max_acc: 0.3 # Since resolution of global path is 0.05 m => at 10 Hz we can drive a max of  3 cm if robot standing still. 
@@ -25,18 +27,27 @@ res_lin_vel_space: 10
 
 # Gain for calculation of cost function for each trajectory
 gain_vel: 20
-gain_goal_angle: 2
-gain_glob_path: 10
-gain_clearance: 20
+gain_goal_angle: 12
+gain_glob_path: 15
+gain_clearance: 15
 
 # versions:
 # v1: 20 10 100 0 -> follows path good, but sometimes local minima (rotate to goal and no lin vel)
 # v2: 50 10 100 0 -> no local minima but makes too big turn radius (not thoroughly tested)
 # v3: 20 1  80  0 -> seems to have np local minima, relative decent turning radius and relative constant lin vel (best so far, not thoroughly tested)
-# v4: 20 2  80  0
+# v4: 20 2  80  0 -> GOOD VERSION W/O ACTIVE OBSTACLE AVOIDANCE
 # v5: 20 2  80  20 -> seems to work normal. Robot does not crash any obstacles, but avoidance in not working (just stays)
 # v6: 20 2  40  20 -> does not stay on path as much and avoidance is still not working
-# v6: 20 2  10  20 -> obstacle avoidance seems to work quite well, but robot is too off of path most at time and not very 'goal driven'
+# v7: 20 2  10  20 -> obstacle avoidance seems to work quite well, but robot is too off of path most at time and not very 'goal driven' and avoids obstacles too m
+# v8: 20 4  20  20 -> obstacle avoidance does not work good, somtimes strange things happen
+# v9: 20 6  15  20 -> does not reach goal if close to obstacle, rather drives 10cm besides goal.
+# v10: 20 8 15  20 -> same problem, bit better 
+# v11: 20 8 18  20 
+# angular vel 0.9 (before 0.7)
+# v12: 20 8 18  20 -> problem solved, but still doesn't stick to the path as much and doesnt avoid obstacles.
+# angular vel 1
+# v12: 20 12 15 20 -> too far away from the path in some cases; other than that (normal traffic) seems to work most of the times
+# v12: 20 12 15 15 -> works ok for normal planning and easy collission avoidance
 
 # Distance from goal that is enough to declare goal reached
 min_dist_goal: 0.2
