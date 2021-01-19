@@ -139,7 +139,6 @@ class DWALocalPlanner():
     def _euclidean_distance(point1, point2=(0,0)):
         return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
 
-
     # TODO: think about use of half the velocity since when accelerating, the mean should be taken.
     def _get_dynamic_window(self, lin_vel, ang_vel):
         dt = self.lookahead
@@ -173,7 +172,6 @@ class DWALocalPlanner():
                 Vd[i,j] = (xv[i,j], yv[i,j])
 
         return Vd
-
 
     # TODO: make more robust inregard to w and check unit of w
     # TODO: improve efficiency of second case.
@@ -219,9 +217,9 @@ class DWALocalPlanner():
         cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
         cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
         cost_prox_to_obst = self._get_prox_to_obst_cost(traj, control_pair, obstacles)
-
         if show_costs == True:
-            print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
+            print(cost_prox_to_obst)
+            #print(cost_vel, cost_angle_to_goal, cost_prox_to_path, cost_prox_to_obst)
         
         return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
             self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst)
@@ -241,6 +239,7 @@ class DWALocalPlanner():
 
     # DONE
     # drift of a couple of cm maybe coming from conversion of grid elements to meters
+    # TODO: look at last rows of method
     def _get_prox_to_path_cost(self, new_state, path):
         diff = path - new_state[0:2]
         euc_distances = np.sqrt(np.power(diff[:, 0], 2) + np.power(diff[:, 1], 2))
@@ -264,7 +263,7 @@ class DWALocalPlanner():
         try:
             obst_x, obst_y = obstacles[:, 0], obstacles[:, 1]
         except IndexError:
-            return 0
+            return 0.60 #based on 1/range_local_costmap
 
         distance_x = traj_x - obst_x  
         distance_y = traj_y - obst_y
@@ -303,10 +302,8 @@ class DWALocalPlanner():
             # Get current obstacles
             obstacles = self.obstacles
             
-
             # Get dynamic window
             Vd = self._get_dynamic_window(lin_vel, ang_vel)
-
 
             # Calcualte cost for each element in the dynamic window
             lowest_cost = np.inf
@@ -320,10 +317,10 @@ class DWALocalPlanner():
 
             if self.debug_mode == True:
                 print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
-                print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, True))
+                print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, obstacles, True))
                 print('current pos: ', robot_state)
                 #print(self.global_path)
-                print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
+                #print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
                 print('----------------------')
 
             # Publish velocity commands

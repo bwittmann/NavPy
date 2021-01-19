@@ -1,8 +1,8 @@
 # To log execution times of time critical operations
-log_times: True
+log_times: False
 
 # Return messages to the terminal that are relevant for debugging
-debug_mode: False
+debug_mode: True
 
 # Lookahead for motion update
 lookahead: 2.5
@@ -26,13 +26,17 @@ res_lin_vel_space: 10
 # Gain for calculation of cost function for each trajectory
 gain_vel: 20
 gain_goal_angle: 2
-gain_glob_path: 80
-gain_clearance: 0
+gain_glob_path: 10
+gain_clearance: 20
 
 # versions:
 # v1: 20 10 100 0 -> follows path good, but sometimes local minima (rotate to goal and no lin vel)
 # v2: 50 10 100 0 -> no local minima but makes too big turn radius (not thoroughly tested)
 # v3: 20 1  80  0 -> seems to have np local minima, relative decent turning radius and relative constant lin vel (best so far, not thoroughly tested)
+# v4: 20 2  80  0
+# v5: 20 2  80  20 -> seems to work normal. Robot does not crash any obstacles, but avoidance in not working (just stays)
+# v6: 20 2  40  20 -> does not stay on path as much and avoidance is still not working
+# v6: 20 2  10  20 -> obstacle avoidance seems to work quite well, but robot is too off of path most at time and not very 'goal driven'
 
 # Distance from goal that is enough to declare goal reached
 min_dist_goal: 0.2
