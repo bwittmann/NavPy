@@ -90,12 +90,13 @@ class ParticleFilter(object):
         in a map where rotation betwwen Occupancy grid map and map coordinate system is 0 and for that it works
         """
 
-        x = x_ogm + self.ogm.map.info.origin.position.x
-        y = y_ogm + self.ogm.map.info.origin.position.y
+        x = x_ogm + self.ogm.map.info.origin.position.x + self.resolution/2
+        y = y_ogm + self.ogm.map.info.origin.position.y + self.resolution/2
         _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
         yaw = yaw_ogm + yaw_map
         
-        return x, y, yaw_ogm
+        # return x, y, yaw_ogm
+        return x, y, yaw
     
     def grid_to_continous(self, x_grid, y_grid):
         """
@@ -123,8 +124,8 @@ class ParticleFilter(object):
             #x=np.random.uniform(0,self.xmax*self.resolution)
             #y=np.random.uniform(0,self.ymax*self.resolution)
             #yaw=np.random.uniform(-2*pi,2*pi)
-            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.7, -self.ogm.map.info.origin.position.x*1.3)
-            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.7, -self.ogm.map.info.origin.position.y*1.3)
+            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.9, -self.ogm.map.info.origin.position.x*1.1)
+            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.9, -self.ogm.map.info.origin.position.y*1.1)
             _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
             yaw = np.random.uniform(-yaw_map*0.7, -yaw_map*1.3)
             
@@ -348,7 +349,6 @@ class ParticleFilter(object):
             nx*=0.1
             ny*=0.1
             nyaw*=0.1
-        
 
         # predict particle according to odometry with a little uncertainty
         x_new = particle.x + self.dx + nx
@@ -363,9 +363,16 @@ class ParticleFilter(object):
         return x_new, y_new, yaw_new
 
     def get_position(self):
-        max_index = np.argmax(self.weights)
-        x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
-        
+        # max_index = np.argmax(self.weights)
+        # x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
+        length = len(self.weights)
+        x_in, y_in, yaw_in = 0, 0, 0
+        for i in range(length):
+            x, y, yaw = self.ogm_to_map(self.particles[i].x, self.particles[i].y, self.particles[i].yaw)
+            x_in += self.weights[i] * x
+            y_in += self.weights[i] * y
+            yaw_in += self.weights[i] * yaw
+
         # transform best particle pose from hokuyo link to base link #time = 0.0005
         self.listener = tf.TransformListener()
         now = rospy.Time.now()
@@ -384,7 +391,8 @@ class ParticleFilter(object):
         _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
 
         
-        return x_in, y_in, yaw_in
+        # return x_in, y_in, yaw_in
+        return x, y, yaw
 
 class MonteCarloLocalization(object):
 
@@ -542,7 +550,7 @@ class MonteCarloLocalization(object):
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = 'map'
         x,y,yaw = self.pf.get_position() #pose of best particle
-        pose.pose.position.x, marker_best.pose.position.y = x,y
+        pose.pose.position.x, pose.pose.position.y = x,y
         pose.pose.position.z = 0.0
         pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw)
         self.pub_pos.publish(pose) 
@@ -571,7 +579,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 80 
+    num_particles = 40
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
