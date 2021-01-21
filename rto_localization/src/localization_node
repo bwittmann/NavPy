@@ -90,8 +90,8 @@ class ParticleFilter(object):
         in a map where rotation betwwen Occupancy grid map and map coordinate system is 0 and for that it works
         """
 
-        x = x_ogm + self.ogm.map.info.origin.position.x + self.resolution/2
-        y = y_ogm + self.ogm.map.info.origin.position.y + self.resolution/2
+        x = x_ogm + self.ogm.map.info.origin.position.x
+        y = y_ogm + self.ogm.map.info.origin.position.y
         _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
         yaw = yaw_ogm + yaw_map
         
