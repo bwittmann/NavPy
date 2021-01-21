@@ -90,12 +90,13 @@ class ParticleFilter(object):
         in a map where rotation betwwen Occupancy grid map and map coordinate system is 0 and for that it works
         """
 
-        x = x_ogm + self.ogm.map.info.origin.position.x
-        y = y_ogm + self.ogm.map.info.origin.position.y
+        x = x_ogm + self.ogm.map.info.origin.position.x + self.resolution/2
+        y = y_ogm + self.ogm.map.info.origin.position.y + self.resolution/2
         _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
         yaw = yaw_ogm + yaw_map
         
-        return x, y, yaw_ogm
+        # return x, y, yaw_ogm
+        return x, y, yaw
     
     def grid_to_continous(self, x_grid, y_grid):
         """
@@ -123,8 +124,8 @@ class ParticleFilter(object):
             #x=np.random.uniform(0,self.xmax*self.resolution)
             #y=np.random.uniform(0,self.ymax*self.resolution)
             #yaw=np.random.uniform(-2*pi,2*pi)
-            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.7, -self.ogm.map.info.origin.position.x*1.3)
-            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.7, -self.ogm.map.info.origin.position.y*1.3)
+            x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.9, -self.ogm.map.info.origin.position.x*1.1)
+            y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.9, -self.ogm.map.info.origin.position.y*1.1)
             _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
             yaw = np.random.uniform(-yaw_map*0.7, -yaw_map*1.3)
             
@@ -167,14 +168,15 @@ class ParticleFilter(object):
         self.weights = weights_new.copy()
 
         #resample
+        self._resample()
         """
         TODO: adapt variance to error and resample dependent on error --> figure out what is the most efficient
               also it has an influence whether variance is set to zero when robot is standing still (in function self._predict_odometry)
-        """
+        
         self.dynamics_translation_noise_std_dev=min(max(0.4/sqrt(sum(weights_not_normalized)), 0.04),0.4)
         if sum(weights_not_normalized) <30:
             self._resample()
-        
+        """
 
     def _resample(self): #time = 0.0003
         """
@@ -342,11 +344,11 @@ class ParticleFilter(object):
         # don't let uncertainty dominate prdiction (when robot does not move, the uncertainty should not move the particles randomly in space)
         """
         TODO: if resampling just for specific errors this is not needed anymore --> when standing still error is small --> no resampling 
+        """
         if abs(self.dx) < 0.00005 and abs(self.dy) < 0.00005 and abs(self.dyaw) < 0.00005:
             nx*=0.1
             ny*=0.1
             nyaw*=0.1
-        """
 
         # predict particle according to odometry with a little uncertainty
         x_new = particle.x + self.dx + nx
@@ -361,9 +363,16 @@ class ParticleFilter(object):
         return x_new, y_new, yaw_new
 
     def get_position(self):
-        max_index = np.argmax(self.weights)
-        x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
-        
+        # max_index = np.argmax(self.weights)
+        # x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
+        length = len(self.weights)
+        x_in, y_in, yaw_in = 0, 0, 0
+        for i in range(length):
+            x, y, yaw = self.ogm_to_map(self.particles[i].x, self.particles[i].y, self.particles[i].yaw)
+            x_in += self.weights[i] * x
+            y_in += self.weights[i] * y
+            yaw_in += self.weights[i] * yaw
+
         # transform best particle pose from hokuyo link to base link #time = 0.0005
         self.listener = tf.TransformListener()
         now = rospy.Time.now()
@@ -382,7 +391,8 @@ class ParticleFilter(object):
         _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
 
         
-        return x_in, y_in, yaw_in
+        # return x_in, y_in, yaw_in
+        return x, y, yaw
 
 class MonteCarloLocalization(object):
 
@@ -407,7 +417,7 @@ class MonteCarloLocalization(object):
         # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
-        self.eval_beams = 8 
+        self.eval_beams = 15
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -436,6 +446,9 @@ class MonteCarloLocalization(object):
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
         self.pub_particles = rospy.Publisher('/particles', MarkerArray, queue_size=1)
         self.pub_best_particle = rospy.Publisher('/particle', Marker, queue_size=1)
+
+        #publish pose of best particle for global planer
+        self.pub_pos = rospy.Publisher('/pose', PoseStamped, queue_size=1)
 
     def laser_scan_callback (self, msg):
         # set min and max range, angle of laser
@@ -528,9 +541,19 @@ class MonteCarloLocalization(object):
         marker_best.pose.position.x, marker_best.pose.position.y = x,y
         marker_best.pose.position.z = 0.0
         marker_best.pose.orientation.x, marker_best.pose.orientation.y, marker_best.pose.orientation.z, marker_best.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw) 
-        self.pub_best_particle.publish(marker_best)
         
+        self.pub_best_particle.publish(marker_best)
         self.pub_particles.publish(markerArray)
+
+        # publish position to global planer
+        pose = PoseStamped()
+        pose.header.stamp = rospy.Time.now()
+        pose.header.frame_id = 'map'
+        x,y,yaw = self.pf.get_position() #pose of best particle
+        pose.pose.position.x, pose.pose.position.y = x,y
+        pose.pose.position.z = 0.0
+        pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw)
+        self.pub_pos.publish(pose) 
 
     # broadcast diff odom and map
     def _broadcast_frame_transformation(self):
@@ -556,7 +579,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
     
 if __name__ == '__main__':
-    num_particles = 100 
+    num_particles = 40
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 

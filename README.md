@@ -2,6 +2,10 @@
 
 TODO: please enter your created packages below
 
+Now all components can be started in navigation_all.launch, you can simply run the following code to start the simulation
+
+        roslaunch rto_navigation navigation_all.launch
+
 ## Packages
 
 ### rto_map_server
