@@ -10,6 +10,7 @@ from nav_msgs.msg import Odometry, Path, OccupancyGrid
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Quaternion, Point
 from sensor_msgs.msg import LaserScan, PointCloud
 from visualization_msgs.msg import Marker
+from std_msgs.msg import String
 
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
@@ -83,6 +84,7 @@ class DWALocalPlanner():
         # Init publisher
         self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         self.pub_local_path = rospy.Publisher('/visualization/local_path', Marker, queue_size=10)
+        self.pub_stuck = rospy.Publisher('/local_planner/stuck', String, queue_size=10)
 
         # Setup marker for visualization of local path
         self.local_plan_marker = Marker()
@@ -140,7 +142,7 @@ class DWALocalPlanner():
         self.global_path = np.array(global_path)
         self.follow_plan = True
         self.lock.release()
-        rospy.loginfo('Local planner reveived a global path')
+        rospy.loginfo('Local planner: Reveived a global path.')
 
     # TODO: try to reduce redundant scan points
     # TODO: try to make conversion more efficient
@@ -269,8 +271,6 @@ class DWALocalPlanner():
             return min_dist_to_path
 
 
-    # TODO: Implement
-    # TODO: Exclude unfeasible trajectories
     def _get_prox_to_obst_cost(self, traj, control_pair, obstacles):
         # Include the break distance according to the current linear velocity
         threshold = self.min_distance + (control_pair[1]**2)/(2*self.max_dec)
@@ -325,30 +325,46 @@ class DWALocalPlanner():
             lowest_cost = np.inf
             for i in range(self.res_lin_vel_space):
                 for j in range(self.res_ang_vel_space):
-                    cost, traj = self._get_cost(Vd[i,j], robot_state, global_path, obstacles)
+                    pair = Vd[i,j]
+                    cost, traj = self._get_cost(pair, robot_state, global_path, obstacles)
                     if cost < lowest_cost:
                         lowest_cost = cost
-                        best_pair = (i,j)
+                        best_pair = pair
                         best_traj = traj
 
+            # Detect if the robot is 'stuck'
+            if best_pair[1] < 0.005:
+                count += 1
+                if count == 10:
+                    rospy.loginfo('Local planner: Init recovery')
+                    self.follow_plan = False
+                    self.twist.linear.x = 0
+                    self.twist.angular.z = 0
+                    self.pub_cmd_vel.publish(self.twist)
+                    msg = String()
+                    msg.data = 'stuck'
+                    self.pub_stuck.publish(msg)
+            else:
+                count = 0
 
+            # Show messages for debugging
             if self.debug_mode == True:
-                print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
-                print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, obstacles, True)[0])
+                print('current v: ', np.round(ang_vel, 3), np.round(lin_vel, 3))
+                print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+                print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
                 print('current pos: ', robot_state)
-                #print(self.global_path)
                 #print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
                 print('----------------------')
 
             # Publish velocity commands
             if self.follow_plan == True:
-                self.twist.linear.x = Vd[best_pair[0],best_pair[1]][1]
-                self.twist.angular.z = Vd[best_pair[0],best_pair[1]][0]
+                self.twist.linear.x = best_pair[1]
+                self.twist.angular.z = best_pair[0]
                 self.pub_cmd_vel.publish(self.twist)
 
             # Check if goal is reached based on distance between robot and goal
             if self._check_goal_reached(robot_state, global_path) == True:
-                rospy.loginfo('Goal position reached.')
+                rospy.loginfo('Local planner: Goal position reached.')
                 self.follow_plan = False
                 self.twist.linear.x = 0
                 self.twist.angular.z = 0
@@ -363,8 +379,6 @@ class DWALocalPlanner():
             elif self.show_local_path == True and self.follow_plan == False:
                 self.local_plan_marker.points.clear()
                 self.pub_local_path.publish(self.local_plan_marker)
-
-            
 
             
             end = time.time()
