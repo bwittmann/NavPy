@@ -13,6 +13,7 @@ from rto_map_server.srv import GetMap
 from geometry_msgs.msg import PoseWithCovarianceStamped, Point, PoseStamped
 from rto_costmap_generator.srv import SwitchMaps
 from sensor_msgs.msg import LaserScan, PointCloud
+from std_msgs.msg import String
 
 # global costmap
 # TODO: Increase performance of _padd_static_map() -> constructing mask takes most of the time
@@ -134,6 +135,7 @@ class CostmapGenerator():
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
         rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
+        rospy.Subscriber('/local_planner/stuck', String, self._cb_stuck)
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
@@ -152,25 +154,15 @@ class CostmapGenerator():
         # Init tf listener
         self.listener = tf.TransformListener()
 
-
-    def get_tf_map_odom(self):
-        '''
-        This function is used to get realtime tf transform information
-        '''
-        try:
-            self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10.0))
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            rospy.logerr("Failed to recieve the transform for map to odom")
-
+    def _cb_stuck(self, msg):
+        if msg.data == 'stuck':
+            pass
 
     def _cb_current_pose(self, msg):
         self.record = True  # TODO: necessay?
 
         # Transform robot pose to from /odom to /map frame 
-        #self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10))
-
-        self.get_tf_map_odom()
-
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10))
         msg_new = PoseStamped()
         msg_new.pose.position = msg.pose.pose.position
         msg_new.pose.orientation = msg.pose.pose.orientation
@@ -273,15 +265,6 @@ class CostmapGenerator():
 
         self.static_map.data = global_costmap.ravel()
 
-    def get_tf_hokuyo_base(self):
-        '''
-        This function is used to get realtime tf transform information
-        '''
-        try:
-            self.listener.waitForTransform('/hokuyo_link', '/base_link', rospy.Time(0), rospy.Duration(10.0))
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            rospy.logerr("Failed to recieve the transform for hokuyo_link to base_link")
-
     # TODO: fix the offset between global costmap and static map
     def generate_local_costmap_and_obstacles(self):
 
@@ -304,10 +287,6 @@ class CostmapGenerator():
 
             # Get current values from subscribed topics
             ranges = self.scan.ranges   # TODO: appears to have no self.scan sometimes.
-
-            #rospy.wait_for_message('/scan', LaserScan)
-            #ranges = self.scan.ranges
-
             current_pose = self.current_pose
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
@@ -316,21 +295,7 @@ class CostmapGenerator():
             pointcloud_hokuyo.points.clear()
             pointcloud_local_costmap.points.clear()
 
-
             # Clear local costmap
-
-            # Create PointStamped message for transformation between frames
-            self.get_tf_hokuyo_base()
-            point_hokuyo_frame = PointStamped()
-            point_hokuyo_frame.header.frame_id = 'hokuyo_link'
-            point_hokuyo_frame.header.stamp = rospy.Time.now()
-            point_hokuyo_frame.point.z = 0
-
-            # Set robot position to the middle of the grid map
-            local_costmap_middle = int(self.local_costmap.info.height/2)
-            robot_pos = (local_costmap_middle, local_costmap_middle)
-
-
             local_costmap = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8)
 
             for idx, element in enumerate(ranges):  # TODO: Think if it makes sense to transform to base_link before.
