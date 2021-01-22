@@ -15,30 +15,17 @@
     </node>
 
     <!-- Run mapserver -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
+    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/> -->
 
     <!-- Run AMCL -->
-    <include file="$(find amcl)/examples/amcl_omni.launch" />
+    <!-- <include file="$(find amcl)/examples/amcl_omni.launch" /> -->
 
     <!-- Run global planner -->
     <!-- <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner.py" output="screen"/> -->
     <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
 
-    <!-- Run move_base -->
-    <!-- <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
-        <rosparam file="$(find rto_navigation)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
-        <rosparam file="$(find rto_navigation)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
-        <rosparam file="$(find rto_navigation)/config/local_costmap_params.yaml" command="load" />
-        <rosparam file="$(find rto_navigation)/config/global_costmap_params.yaml" command="load" />
-        <rosparam file="$(find rto_navigation)/config/base_local_planner_params.yaml" command="load" /> --> --> -->
-        <!-- TODO: Probably exchange base local planner -->
-        <!-- <param name="base_local_planner" value="rto_local_planner/RTOLocalPlanner" />
-        <param name="controller_frequency" value="15.0" />
-        <remap from="cmd_vel" to="test_cmd_vel" />
-    </node> -->
-
-    <!-- Run rto_safety_node -->
-    <!-- <group if="$(arg safety)">
-        <include file="$(find rto_safety)/launch/rto_safety_node.launch"/>
-    </group> -->
+    <!-- Run local planner -->
+    <node name="local_planner" pkg="rto_local_planner_" type="local_planner_node" output='screen'>
+        <rosparam file="$(find rto_local_planner_)/config/local_planner_params.yaml"/>
+    </node>
 </launch>

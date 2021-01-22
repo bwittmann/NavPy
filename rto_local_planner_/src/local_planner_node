@@ -70,7 +70,7 @@ class DWALocalPlanner():
         
         # Init tf listener
         self.listener = tf.TransformListener()
-        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
+        # self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
 
         # Setup PoseStamped for transformation of points from frame /odom to /map
         self.pose = PoseStamped()
@@ -115,8 +115,21 @@ class DWALocalPlanner():
         self.obstacles = []
         self.follow_plan = False
 
+    def get_tf(self):
+        '''
+        This function is used to get realtime tf transform information
+        '''
+        try:
+            self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10.0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logerr("Failed to recieve the transform for map to odom")
+
     def _cb_current_twist_and_pose(self, msg):
+
         #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))  #TODO: seems to be enought to state in init method
+        # get tf transform
+        #self.get_tf()
+
         self.lock.acquire()
 
         # Transform robot pose to from /odom to /map frame 
