@@ -40,7 +40,7 @@ class MapServer():
         # One argument results in a list that has length 2. 
         # First arg: path to node, second arg: actual passed argument
         # if len(args) != 2:
-        #    rospy.logerr('Number of passed arguments does not match (1 required).')
+        #    rospy.logerr('Map server: Number of passed arguments does not match (1 required).')
         #   sys.exit(1)
         # yaml_path = args[1]
 
@@ -73,7 +73,7 @@ class MapServer():
 
 
         # Comment out for debugging
-        #rospy.loginfo(self.map_info)
+        #print(self.map_info)
         #cv2.imwrite('test.jpg', self.map_info['map1']['map_raw'])
 
         # Perpare messages for the service
@@ -83,7 +83,7 @@ class MapServer():
         self.pub_map.publish(self.occupancy_grids['map1'])
 
         if len(self.occupancy_grids) == 0:
-            rospy.logwarn('The map server currently stores 0 maps')
+            rospy.logwarn('Map server: Currently 0 maps are stored.')
 
         # Clear dict to save space
         self.map_info.clear()
@@ -127,10 +127,10 @@ class MapServer():
         @return: A OccupancyGrid message corresponding to the map number of the request.
         """
         if 'map' + str(req.map_nr) not in self.occupancy_grids:
-            rospy.logerr("Request to 'get_map' failed. Request does not match to any stored maps.")
+            rospy.logerr("Map server: Request to 'get_map' failed. Request does not match to any stored maps.")
             return
         else:
-            rospy.loginfo("Service 'get_map' requested (Request: '{}').".format(req))
+            rospy.loginfo("Map server: Service 'get_map' requested (request: '{}').".format(req))
 
             # Add time stamp to response message
             self.occupancy_grids['map' + str(req.map_nr)].header.stamp = rospy.Time.now()
