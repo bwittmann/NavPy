@@ -73,6 +73,7 @@ class ParticleFilter(object):
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
+        self.odom_counter = 0 # calculates how many odometry messages were received between predictions
 
         # uncertainty for dynamic and sensormodel
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
@@ -162,6 +163,7 @@ class ParticleFilter(object):
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
+        self.odom_counter = 0
 
         # normalize weights
         weights_new = [i/sum(weights_not_normalized) for i in weights_not_normalized]
@@ -331,15 +333,16 @@ class ParticleFilter(object):
         self.dx += diff_position[0]
         self.dy += diff_position[1]
         self.dyaw += yaw_diff
+        self.odom_counter +=1
 
     def _predict_odometry(self, particle): #time = 1e-5
         """
         predicts particle according to odometry
         """
         # uncertainty which predicts every particle a little different 
-        nx = random.gauss(0, self.dynamics_translation_noise_std_dev)
-        ny = random.gauss(0, self.dynamics_translation_noise_std_dev)
-        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev)
+        nx = random.gauss(0, self.dynamics_translation_noise_std_dev) * self.odom_counter
+        ny = random.gauss(0, self.dynamics_translation_noise_std_dev) * self.odom_counter
+        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev) * self.odom_counter
 
         # don't let uncertainty dominate prdiction (when robot does not move, the uncertainty should not move the particles randomly in space)
         """
@@ -365,6 +368,7 @@ class ParticleFilter(object):
     def get_position(self):
         # max_index = np.argmax(self.weights)
         # x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
+        start = timer()
         length = len(self.weights)
         x_in, y_in, yaw_in = 0, 0, 0
         for i in range(length):
@@ -372,13 +376,14 @@ class ParticleFilter(object):
             x_in += self.weights[i] * x
             y_in += self.weights[i] * y
             yaw_in += self.weights[i] * yaw
-
+    
         # transform best particle pose from hokuyo link to base link #time = 0.0005
         self.listener = tf.TransformListener()
         now = rospy.Time.now()
-        self.listener.waitForTransform('/hokuyo_link', '/base_link', now, rospy.Duration(10.0)) 
+        #self.listener.waitForTransform('/hokuyo_link', '/base_link', now, rospy.Duration(10.0))
+        self.listener.waitForTransform('/base_link', '/hokuyo_link', now, rospy.Duration(10.0))
         pose_msg = PoseStamped()
-        pose_msg.header.frame_id = '/hokuyo_link'
+        pose_msg.header.frame_id = '/base_link'
         pose_msg.pose.position.x=x_in
         pose_msg.pose.position.y=y_in
         q = transform.quaternion_from_euler(0,0,yaw_in)
@@ -386,12 +391,15 @@ class ParticleFilter(object):
         pose_msg.pose.orientation.y = q[1]
         pose_msg.pose.orientation.z = q[2]
         pose_msg.pose.orientation.w = q[3]
-        new_pose = self.listener.transformPose('/base_link', pose_msg)
+        new_pose = self.listener.transformPose('/hokuyo_link', pose_msg)
         x,y = new_pose.pose.position.x, new_pose.pose.position.y
         _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
+        """
+        x = x_in - 0.08
+        y=y_in
+        yaw = yaw_in
+        """
 
-        
-        # return x_in, y_in, yaw_in
         return x, y, yaw
 
 class MonteCarloLocalization(object):
