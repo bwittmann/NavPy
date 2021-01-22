@@ -4,6 +4,9 @@ init_map_nr: 1
 # To log execution times of time critical operations
 log_times: True
 
+# Return messages to the terminal that are relevant for debugging
+debug_mode: False
+
 # Params necessary for padding of obstacles to obatain a point representation 
 # of the robot for the task of path planning.
 global_costmap: {

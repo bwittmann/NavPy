@@ -16,7 +16,7 @@ from sensor_msgs.msg import LaserScan, PointCloud
 from std_msgs.msg import String
 
 # global costmap
-# TODO: Increase performance of _padd_static_map() -> constructing mask takes most of the time
+# TODO: Increase performance of _pad_static_map() -> constructing mask takes most of the time
 #       worse performance: np.greater()
 # TODO: Think about use of threads again.
 # TODO: Do we need a mutex for a service call?
@@ -38,7 +38,7 @@ def timed(func):
         out = func(*args)
         time_end = time.time()
         time_took = time_end - time_start
-        rospy.loginfo('Method {} from map gen took {}s.'.format(func.__name__, time_took))
+        rospy.loginfo('Costmap generator: Method {} took {}s.'.format(func.__name__, time_took))
         return out
     return wrapper
 
@@ -78,6 +78,7 @@ class CostmapGenerator():
 
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
+        self.debug_mode = rospy.get_param('~debug_mode')
 
         self.hard_padding = rospy.get_param('~global_costmap')['robot_diameter']/2 + \
              rospy.get_param('~global_costmap')['safety_distance']      # Unit: m
@@ -116,7 +117,7 @@ class CostmapGenerator():
         self._start_switchmaps_service()
 
         # Padd the static map based on parameters
-        self._padd_static_map()
+        self._pad_static_map()
 
         # Publish padded map on topic /global_costmap (latched)
         self.static_map.header.stamp = rospy.Time.now()
@@ -155,8 +156,22 @@ class CostmapGenerator():
         self.listener = tf.TransformListener()
 
     def _cb_stuck(self, msg):
+        self.lock.acquire()
+
         if msg.data == 'stuck':
-            pass
+            rospy.loginfo('Costmap generator: Adapted global costmap based on local costmap.')
+            global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
+            
+            for point in self.local_obstacles.points:
+                x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
+                y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
+                self._pad_point(global_costmap, (y, x))
+
+            self.static_map.data = global_costmap.ravel()
+            self.static_map.header.stamp = rospy.Time.now()
+            self.pub_global_costmap.publish(self.static_map)
+
+        self.lock.release()
 
     def _cb_current_pose(self, msg):
         self.record = True  # TODO: necessay?
@@ -221,17 +236,34 @@ class CostmapGenerator():
         self.map_nr = req.map_nr_switch
         success = self._call_get_map_srv()
         if success == True:
-            rospy.loginfo('Map gen changed map in map server to: map{}.'.format(self.map_nr))
+            rospy.loginfo('Costmap generator: Changed map in map server to map{}.'.format(self.map_nr))
 
-            self._padd_static_map()
+            self._pad_static_map()
 
             self.static_map.header.stamp = rospy.Time.now()
             self.pub_global_costmap.publish(self.static_map)
 
         return success
 
+    def _pad_point(self, costmap, point):
+        x, y = point
+
+        # Use 'open grid' function to create a 'circular' mask for efficient padding
+        grid = np.ogrid[-x:self.static_map.info.height-x, -y:self.static_map.info.width-y]
+
+        # Apply 'hard padding'
+        mask_hard_padding = grid[1]*grid[1] + grid[0]*grid[0] <= self.hard_padding * self.hard_padding
+        costmap[mask_hard_padding] = self.padded_val
+
+        if self.apply_soft_padding == True:
+            # Apply 'soft padding' for each step in the decay of the cost
+            for idx, val in enumerate(self.soft_padding, start=1):
+                masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
+                    & (costmap < val) & (costmap > -1) # Delete last statement to inc. performance
+                costmap[masks_soft_padding] = val
+
     @timed
-    def _padd_static_map(self):
+    def _pad_static_map(self):
         """
         Private method that applies hard and soft padding to the static map.
         """
@@ -241,27 +273,15 @@ class CostmapGenerator():
         occupied_index = np.where(global_costmap == 100)
         #rospy.loginfo(len(occupied_index[0]))
 
-        # Loop over occupied cells
+        # Loop over occupied cells and pad them
         for coord in zip(occupied_index[0], occupied_index[1]):
-            x_occu, y_occu = coord
-
-            # Use 'open grid' function to create a 'circular' mask for efficient padding
-            grid = np.ogrid[-x_occu:self.static_map.info.height-x_occu, -y_occu:self.static_map.info.width-y_occu]
-
-            # Apply 'hard padding'
-            mask_hard_padding = grid[1]*grid[1] + grid[0]*grid[0] <= self.hard_padding * self.hard_padding
-            global_costmap[mask_hard_padding] = self.padded_val
-
-            if self.apply_soft_padding == True:
-                # Apply 'soft padding' for each step in the decay of the cost
-                for idx, val in enumerate(self.soft_padding, start=1):
-                    masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
-                        & (global_costmap < val) & (global_costmap > -1) # Delete last statement to inc. performance
-                    global_costmap[masks_soft_padding] = val
-
-        # Uncomment for testing and to receive an image of the global_costmap
-        #cv2.imwrite('map_padded_comp.jpg', global_costmap.astype(np.uint8))
-        #print(np.unique(global_costmap))
+            self._pad_point(global_costmap, coord)
+    
+        # Show messages for debugging
+        if self.debug_mode == True:
+            # Receive an image of the global_costmap
+            cv2.imwrite('map_padded_comp.jpg', global_costmap.astype(np.uint8))
+            print(np.unique(global_costmap))
 
         self.static_map.data = global_costmap.ravel()
 
@@ -356,7 +376,8 @@ class CostmapGenerator():
             self.pub_local_costmap.publish(self.local_costmap)
 
             # Publish local_obstacles
-            self.pub_local_obstacles.publish(pointcloud_map)
+            self.local_obstacles = pointcloud_map
+            self.pub_local_obstacles.publish(self.local_obstacles)
 
             end = time.time()
             # To ensure that desired frequency does not get affected by computation time.
