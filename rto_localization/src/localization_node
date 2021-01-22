@@ -73,7 +73,6 @@ class ParticleFilter(object):
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
-        self.odom_counter = 0 # calculates how many odometry messages were received between predictions
 
         # uncertainty for dynamic and sensormodel
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
@@ -163,7 +162,6 @@ class ParticleFilter(object):
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
-        self.odom_counter = 0
 
         # normalize weights
         weights_new = [i/sum(weights_not_normalized) for i in weights_not_normalized]
@@ -333,25 +331,26 @@ class ParticleFilter(object):
         self.dx += diff_position[0]
         self.dy += diff_position[1]
         self.dyaw += yaw_diff
-        self.odom_counter +=1
 
     def _predict_odometry(self, particle): #time = 1e-5
         """
         predicts particle according to odometry
         """
         # uncertainty which predicts every particle a little different 
-        nx = random.gauss(0, self.dynamics_translation_noise_std_dev) * self.odom_counter
-        ny = random.gauss(0, self.dynamics_translation_noise_std_dev) * self.odom_counter
-        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev) * self.odom_counter
+        nx = random.gauss(0, self.dynamics_translation_noise_std_dev) * (self.dx+self.dy)
+        ny = random.gauss(0, self.dynamics_translation_noise_std_dev) * (self.dx+self.dy)
+        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev) * self.dyaw
 
         # don't let uncertainty dominate prdiction (when robot does not move, the uncertainty should not move the particles randomly in space)
         """
         TODO: if resampling just for specific errors this is not needed anymore --> when standing still error is small --> no resampling 
         """
+        """
         if abs(self.dx) < 0.00005 and abs(self.dy) < 0.00005 and abs(self.dyaw) < 0.00005:
             nx*=0.1
             ny*=0.1
             nyaw*=0.1
+        """
 
         # predict particle according to odometry with a little uncertainty
         x_new = particle.x + self.dx + nx
@@ -399,7 +398,7 @@ class ParticleFilter(object):
         y=y_in
         yaw = yaw_in
         """
-        
+
         return x, y, yaw
 
 class MonteCarloLocalization(object):
@@ -474,7 +473,7 @@ class MonteCarloLocalization(object):
         self.count_mcl += 1
 
         if self.count_mcl == 8:#5Hz
-
+            
             # mcl prediction and update
             self.pf.handle_observation(msg)
 
@@ -499,6 +498,12 @@ class MonteCarloLocalization(object):
     def odometry_callback(self, msg):
         self.odometry = msg
 
+        """
+        Can be included to simulate noise in the odometry in translatory direction
+        n_trans = random.gauss(0, 0.1)
+        self.odometry.pose.pose.position.x += n_trans
+        self.odometry.pose.pose.position.y += n_trans
+        """
         if self.last_odometry:
             self.lock.acquire()
 
@@ -587,8 +592,8 @@ class MonteCarloLocalization(object):
             rate.sleep()
 
 if __name__ == '__main__':
-    num_particles = 60
-        mcl = MonteCarloLocalization(num_particles)
+    num_particles = 40
+    mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
 
