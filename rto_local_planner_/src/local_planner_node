@@ -332,13 +332,6 @@ class DWALocalPlanner():
                         best_traj = traj
 
 
-            if self.show_local_path == True:
-                self.local_plan_marker.points.clear()
-                for point in best_traj:
-                    self.local_plan_marker.points.append(Point(point[0] , point[1], 0))
-                self.pub_local_path.publish(self.local_plan_marker)
-
-
             if self.debug_mode == True:
                 print('current v:', np.round(ang_vel, 3), np.round(lin_vel, 3), 'dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
                 print('best score: ', Vd[best_pair], self._get_cost(Vd[best_pair], robot_state, global_path, obstacles, True)[0])
@@ -360,6 +353,19 @@ class DWALocalPlanner():
                 self.twist.linear.x = 0
                 self.twist.angular.z = 0
                 self.pub_cmd_vel.publish(self.twist)
+
+            # Publish visualization of local path
+            if self.show_local_path == True and self.follow_plan == True:
+                self.local_plan_marker.points.clear()
+                for point in best_traj:
+                    self.local_plan_marker.points.append(Point(point[0] , point[1], 0))
+                self.pub_local_path.publish(self.local_plan_marker)
+            elif self.show_local_path == True and self.follow_plan == False:
+                self.local_plan_marker.points.clear()
+                self.pub_local_path.publish(self.local_plan_marker)
+
+            
+
             
             end = time.time()
             if self.log_times == True:
