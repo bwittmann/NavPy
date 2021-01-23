@@ -13,9 +13,6 @@ from threading import Lock
 import random
 import numpy as np
 from matplotlib import pyplot as plt
-import ipdb
-import sys
-from timeit import default_timer as timer
 
 
 from rto_map_server.srv import GetMap
@@ -204,13 +201,16 @@ class ParticleFilter(object):
 
         self.particles = new_particles.copy()
 
-    def get_occupied_cell(self,x,y): #time = 1e-6
-        if x < self.xmin or x > self.xmax or y < self.ymin or y > self.ymax:
-            return 200
-        elif self.ogm_map[x, y] == 100:
-            return 100
-        else:
-            return 0
+    def get_occupied_cell_vec(self,x,y):
+        np.set_printoptions(threshold=sys.maxsize)
+        cells = np.array([x,y]).T
+        mask = (cells[:,0]>=self.xmin)&(cells[:,0]<=self.xmax)&(cells[:,1]>=self.ymin)&(cells[:,1]<=self.ymax)
+        result=np.zeros(mask.shape)
+        result[mask==False]=200
+        result[mask==True]=self.ogm_map[cells[mask==True,0], cells[mask==True,1]]
+        return result
+
+        
 
 
     def _get_laser_scan_for_particle(self, x, y, yaw): # time = 0.006
@@ -243,7 +243,7 @@ class ParticleFilter(object):
 
         # for each x,y position get status of cell (cell out of map, occupied cell, not occupied cell)
         get_occupied_cell_vectorized = np.vectorize(self.get_occupied_cell) #vectorize function to apply on vectors
-        occupied_info_vector = get_occupied_cell_vectorized(x_values_grid_vector, y_values_grid_vector)
+        occupied_info_vector = self.get_occupied_cell_vec(x_values_grid_vector, y_values_grid_vector)
         assert(occupied_info_vector.size == distances.size*cos_angles.size)
 
         # reshape  vector as array distances is axis=0 angles is axis=1
@@ -266,7 +266,7 @@ class ParticleFilter(object):
                 particle_ranges.append(self.laser_max_range)
             else: # find distance for closest obstacle for that angles (smalles distance which is not laser_min_range or 0)
                 particle_ranges.append(np.min(occupied_info_array[:,i][np.nonzero(occupied_info_array[:,i])]))
-
+        
         return particle_ranges
 
 
@@ -367,7 +367,6 @@ class ParticleFilter(object):
     def get_position(self):
         # max_index = np.argmax(self.weights)
         # x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
-        start = timer()
         length = len(self.weights)
         x_in, y_in, yaw_in = 0, 0, 0
         for i in range(length):
@@ -592,7 +591,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
 
 if __name__ == '__main__':
-    num_particles = 40
+    num_particles = 200
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
