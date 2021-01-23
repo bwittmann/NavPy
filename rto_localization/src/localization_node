@@ -13,6 +13,8 @@ from threading import Lock
 import random
 import numpy as np
 from matplotlib import pyplot as plt
+from timeit import default_timer as timer
+import cProfile, pstats, io
 
 
 from rto_map_server.srv import GetMap
@@ -76,6 +78,7 @@ class ParticleFilter(object):
         self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
         self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
 
+        self.pr = cProfile.Profile()
     def ogm_to_map(self, x_ogm, y_ogm, yaw_ogm):
         """
         Transforms map coordinates in the Occupancy Grid Map (coordinate system in bottom left corner of Occupancy Grid Map)
@@ -201,17 +204,13 @@ class ParticleFilter(object):
 
         self.particles = new_particles.copy()
 
-    def get_occupied_cell_vec(self,x,y):
-        np.set_printoptions(threshold=sys.maxsize)
+    def _get_occupied_cell_vec(self,x,y):
         cells = np.array([x,y]).T
         mask = (cells[:,0]>=self.xmin)&(cells[:,0]<=self.xmax)&(cells[:,1]>=self.ymin)&(cells[:,1]<=self.ymax)
         result=np.zeros(mask.shape)
         result[mask==False]=200
         result[mask==True]=self.ogm_map[cells[mask==True,0], cells[mask==True,1]]
         return result
-
-        
-
 
     def _get_laser_scan_for_particle(self, x, y, yaw): # time = 0.006
         """
@@ -242,8 +241,7 @@ class ParticleFilter(object):
         assert(x_values_grid_vector.size == distances.size*cos_angles.size and y_values_grid_vector.size == distances.size*sin_angles.size)
 
         # for each x,y position get status of cell (cell out of map, occupied cell, not occupied cell)
-        get_occupied_cell_vectorized = np.vectorize(self.get_occupied_cell) #vectorize function to apply on vectors
-        occupied_info_vector = self.get_occupied_cell_vec(x_values_grid_vector, y_values_grid_vector)
+        occupied_info_vector = self._get_occupied_cell_vec(x_values_grid_vector, y_values_grid_vector)
         assert(occupied_info_vector.size == distances.size*cos_angles.size)
 
         # reshape  vector as array distances is axis=0 angles is axis=1
@@ -326,6 +324,7 @@ class ParticleFilter(object):
 
         # diff x,y position
         diff_position = position-last_position
+        diff_position += random.gauss(0, 0.1)*diff_position
 
         #add relative motion to commulated relativ motion which is used in next prediction
         self.dx += diff_position[0]
@@ -471,7 +470,7 @@ class MonteCarloLocalization(object):
         self.lock.acquire()
         self.count_mcl += 1
 
-        if self.count_mcl == 8:#5Hz
+        if self.count_mcl == 2:#5Hz
             
             # mcl prediction and update
             self.pf.handle_observation(msg)
@@ -496,13 +495,7 @@ class MonteCarloLocalization(object):
 
     def odometry_callback(self, msg):
         self.odometry = msg
-
-        """
-        Can be included to simulate noise in the odometry in translatory direction
-        n_trans = random.gauss(0, 0.1)
-        self.odometry.pose.pose.position.x += n_trans
-        self.odometry.pose.pose.position.y += n_trans
-        """
+        
         if self.last_odometry:
             self.lock.acquire()
 
