@@ -237,7 +237,7 @@ class ParticleFilter(object):
         assert(x_values.shape==(distances.size,cos_angles.size) and y_values.shape==(distances.size,sin_angles.size))
 
         #transform positions in grid cells
-        x_values_grid = (x_values/self.resolution).astype(int) 
+        x_values_grid = (x_values/self.resolution).astype(int)
         y_values_grid = (y_values/self.resolution).astype(int)
 
         # turn array in vector --> concatenate vectors each containing observed x_position/ y_positions for one distance for all angles
@@ -347,7 +347,7 @@ class ParticleFilter(object):
         """
         predicts particle according to odometry
         """
-        # uncertainty which predicts every particle a little different 
+        # uncertainty which predicts every particle a little different
         nx = random.gauss(0, self.dynamics_translation_noise_std_dev) * (self.dx+self.dy)
         ny = random.gauss(0, self.dynamics_translation_noise_std_dev) * (self.dx+self.dy)
         nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev) * self.dyaw
@@ -367,9 +367,9 @@ class ParticleFilter(object):
         x_new = particle.x + self.dx + nx
         y_new = particle.y + self.dy + ny
         if particle.yaw + self.dyaw + nyaw > pi:
-            yaw_new = -pi + self.dyaw + nyaw
+            yaw_new = particle.yaw - pi + self.dyaw + nyaw
         elif particle.yaw + self.dyaw + nyaw< -pi:
-            yaw_new = pi + self.dyaw + nyaw
+            yaw_new = particle.yaw + pi + self.dyaw + nyaw
         else:
             yaw_new = particle.yaw + self.dyaw + nyaw
 
@@ -385,8 +385,13 @@ class ParticleFilter(object):
             x_in += self.weights[i] * x
             y_in += self.weights[i] * y
             yaw_in += self.weights[i] * yaw
+<<<<<<< HEAD
     
         # transform best particle pose from hokuyo link to base link (x = x_in-0.08)#time = 0.0005
+=======
+
+        # transform best particle pose from hokuyo link to base link #time = 0.0005
+>>>>>>> 3381922c6e0b8f97a89ab551101ef4dd55f2110c
         self.listener = tf.TransformListener()
         now = rospy.Time.now()
         self.listener.waitForTransform('/base_link', '/hokuyo_link', now, rospy.Duration(10.0))
@@ -475,8 +480,14 @@ class MonteCarloLocalization(object):
         #measurement update
         self.lock.acquire()
         self.count_mcl += 1
+<<<<<<< HEAD
         if self.count_mcl == 8:#5Hz
             
+=======
+
+        if self.count_mcl == 2:#5Hz
+
+>>>>>>> 3381922c6e0b8f97a89ab551101ef4dd55f2110c
             # mcl prediction and update
             self.pf.handle_observation(msg)
 
@@ -500,7 +511,7 @@ class MonteCarloLocalization(object):
 
     def odometry_callback(self, msg):
         self.odometry = msg
-        
+
         if self.last_odometry:
             self.lock.acquire()
 
