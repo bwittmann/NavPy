@@ -32,12 +32,9 @@ class ParticleFilter(object):
 
     # initialize object of ParticleFilter and set all the parameters
     def __init__(self, num_particles, occ_grid_map,
-
-
                  laser_min_range, laser_max_range, laser_min_angle, laser_max_angle, subsampled_angles, eval_beams, 
                  dynamics_translation_noise_std_dev,
-                 dynamics_orientation_noise_std_dev,
-                 beam_range_measurement_noise_std_dev):
+                 dynamics_orientation_noise_std_dev):
 
         #Particle Filter variables
         self.num_particles = num_particles
@@ -78,8 +75,8 @@ class ParticleFilter(object):
         # uncertainty for dynamic and sensormodel
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
         self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
-        self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
 
+        # check time and memory
         self.pr = cProfile.Profile()
         self.process = psutil.Process(os.getpid())
 
@@ -125,9 +122,6 @@ class ParticleFilter(object):
 
         while True:
 
-            #x=np.random.uniform(0,self.xmax*self.resolution)
-            #y=np.random.uniform(0,self.ymax*self.resolution)
-            #yaw=np.random.uniform(-2*pi,2*pi)
             x = np.random.uniform(-self.ogm.map.info.origin.position.x*0.9, -self.ogm.map.info.origin.position.x*1.1)
             y = np.random.uniform(-self.ogm.map.info.origin.position.y*0.9, -self.ogm.map.info.origin.position.y*1.1)
             _, _, yaw_map = transform.euler_from_quaternion(np.array([self.ogm.map.info.origin.orientation.x, self.ogm.map.info.origin.orientation.y, self.ogm.map.info.origin.orientation.z, self.ogm.map.info.origin.orientation.w]))
@@ -157,11 +151,9 @@ class ParticleFilter(object):
         weights_not_normalized =[]
         # calculate weights
         for particle in self.particles:
-            self.pr.enable()
             particle.x, particle.y, particle.yaw = self._predict_odometry(particle)
             error = self._get_prediction_error(laser_scan_msg, particle)
             weights_not_normalized.append(exp(-error))
-            self.pr.disable()
 
         #commulated relative motion until next prediction set to 0
         self.dx = 0
@@ -225,7 +217,7 @@ class ParticleFilter(object):
             - Incrementally go trough all angles and distances and check if there is an obstacle or edge of map
             - This simulates what the robot would sense in the directions of subsampled angles if it is in the pose of the particle
         """
-        particle_ranges = []
+        particle_ranges = np.zeros((self.eval_beams))
         angles = np.array(self.subsampled_angles) + yaw # total angle = angle of robot position + laser angle
         sin_angles = np.sin(angles) # sin values of all angles
         cos_angles = np.cos(angles) # cos valuse of all angles
@@ -262,15 +254,14 @@ class ParticleFilter(object):
         occupied_info_array[occupied_info_array==200]=self.laser_max_range
 
         # go through all angles(axis=1)
-        for i in range(occupied_info_array.shape[1]):
+        for i in range(particle_ranges.size):
             if np.any(occupied_info_array[:,i]==self.laser_min_range): # distances for that angle contain laser_min_range (any distance with min_laser_range)
-                particle_ranges.append(self.laser_min_range)
+                particle_ranges[i] = self.laser_min_range
             elif np.all(occupied_info_array[:,i]==0): # no distance for that angle (0 for all distances which marks free cell)
-                particle_ranges.append(self.laser_max_range)
+                particle_ranges[i] = self.laser_max_range
             else: # find distance for closest obstacle for that angles (smalles distance which is not laser_min_range or 0)
-                particle_ranges.append(np.min(occupied_info_array[:,i][np.nonzero(occupied_info_array[:,i])]))
-        #rospy.loginfo(self.process.memory_info())
-        #rospy.loginfo(sys.getsizeof(particle_ranges))
+                particle_ranges[i] = np.min(occupied_info_array[:,i][np.nonzero(occupied_info_array[:,i])])
+
         return particle_ranges
 
 
@@ -309,7 +300,6 @@ class ParticleFilter(object):
             subsampled_ranges = self._subsample_laser_scan(laser_scan_msg)
             particle_ranges = self._get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
             diff_ranges = np.abs(np.array(subsampled_ranges)-np.array(particle_ranges))
-            rospy.loginfo(sys.getsizeof(particle_ranges))
             norm_error = np.linalg.norm(diff_ranges)
             error = pow(norm_error,2)
         return error
@@ -367,9 +357,9 @@ class ParticleFilter(object):
         x_new = particle.x + self.dx + nx
         y_new = particle.y + self.dy + ny
         if particle.yaw + self.dyaw + nyaw > pi:
-            yaw_new = particle.yaw - pi + self.dyaw + nyaw
+            yaw_new = -pi + self.dyaw + nyaw
         elif particle.yaw + self.dyaw + nyaw< -pi:
-            yaw_new = particle.yaw + pi + self.dyaw + nyaw
+            yaw_new = pi + self.dyaw + nyaw
         else:
             yaw_new = particle.yaw + self.dyaw + nyaw
 
@@ -385,13 +375,8 @@ class ParticleFilter(object):
             x_in += self.weights[i] * x
             y_in += self.weights[i] * y
             yaw_in += self.weights[i] * yaw
-<<<<<<< HEAD
     
         # transform best particle pose from hokuyo link to base link (x = x_in-0.08)#time = 0.0005
-=======
-
-        # transform best particle pose from hokuyo link to base link #time = 0.0005
->>>>>>> 3381922c6e0b8f97a89ab551101ef4dd55f2110c
         self.listener = tf.TransformListener()
         now = rospy.Time.now()
         self.listener.waitForTransform('/base_link', '/hokuyo_link', now, rospy.Duration(10.0))
@@ -438,13 +423,11 @@ class MonteCarloLocalization(object):
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
         dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
-        beam_range_measurement_noise_std_dev = rospy.get_param("~beam_range_measurement_noise_std_dev")
 
         # instantiate ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0, 0, self.eval_beams,
                                  dynamics_translation_noise_std_dev,
-                                 dynamics_orientation_noise_std_dev,
-                                 beam_range_measurement_noise_std_dev)
+                                 dynamics_orientation_noise_std_dev)
 
         # initialize particles of pf
         self.pf.init_particles()
@@ -480,17 +463,10 @@ class MonteCarloLocalization(object):
         #measurement update
         self.lock.acquire()
         self.count_mcl += 1
-<<<<<<< HEAD
+        
         if self.count_mcl == 8:#5Hz
-            
-=======
-
-        if self.count_mcl == 2:#5Hz
-
->>>>>>> 3381922c6e0b8f97a89ab551101ef4dd55f2110c
             # mcl prediction and update
             self.pf.handle_observation(msg)
-
             # most probable particle pose
             x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
             orientation_particle = transform.quaternion_from_euler(0, 0, yaw_Particle_Filter)
@@ -593,15 +569,11 @@ class MonteCarloLocalization(object):
 
     def run(self):
         rate = rospy.Rate(5) #measurement update with 5Hz
-        start = timer()
         while not rospy.is_shutdown():
             if self.odometry != None:
                 self._broadcast_frame_transformation()
                 self._publish()
             rate.sleep()
-            time = timer()-start
-            #if (time>10.0 and time<10.3) or (time>100.0 and time<100.3):
-                #self.pf.pr.print_stats()
 
 if __name__ == '__main__':
     num_particles = 120
