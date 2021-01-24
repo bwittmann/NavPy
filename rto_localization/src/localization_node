@@ -15,6 +15,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from timeit import default_timer as timer
 import cProfile, pstats, io
+import os, psutil
+import sys
 
 
 from rto_map_server.srv import GetMap
@@ -45,7 +47,7 @@ class ParticleFilter(object):
 
         # Occupancy grid map (self.ogm[x,y])
         self.ogm = occ_grid_map
-        self.ogm_map = self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.height, occ_grid_map.map.info.width))
+        self.ogm_map = np.transpose(np.asarray(occ_grid_map.map.data, dtype=np.int8).reshape(occ_grid_map.map.info.height, occ_grid_map.map.info.width))
         """
         TODO: the next line transforms all "not seen" cells to occupied cells. The map used for developing MCL is recorded poorly
         obstacles where not completely surrounded with cells 100. To improve the performance i then transformed also the cells within
@@ -79,6 +81,8 @@ class ParticleFilter(object):
         self.beam_range_measurement_noise_std_dev = beam_range_measurement_noise_std_dev
 
         self.pr = cProfile.Profile()
+        self.process = psutil.Process(os.getpid())
+
     def ogm_to_map(self, x_ogm, y_ogm, yaw_ogm):
         """
         Transforms map coordinates in the Occupancy Grid Map (coordinate system in bottom left corner of Occupancy Grid Map)
@@ -151,12 +155,13 @@ class ParticleFilter(object):
         prediction and measurement update is started
         """
         weights_not_normalized =[]
-
         # calculate weights
         for particle in self.particles:
+            self.pr.enable()
             particle.x, particle.y, particle.yaw = self._predict_odometry(particle)
             error = self._get_prediction_error(laser_scan_msg, particle)
             weights_not_normalized.append(exp(-error))
+            self.pr.disable()
 
         #commulated relative motion until next prediction set to 0
         self.dx = 0
@@ -264,7 +269,8 @@ class ParticleFilter(object):
                 particle_ranges.append(self.laser_max_range)
             else: # find distance for closest obstacle for that angles (smalles distance which is not laser_min_range or 0)
                 particle_ranges.append(np.min(occupied_info_array[:,i][np.nonzero(occupied_info_array[:,i])]))
-        
+        #rospy.loginfo(self.process.memory_info())
+        #rospy.loginfo(sys.getsizeof(particle_ranges))
         return particle_ranges
 
 
@@ -303,6 +309,7 @@ class ParticleFilter(object):
             subsampled_ranges = self._subsample_laser_scan(laser_scan_msg)
             particle_ranges = self._get_laser_scan_for_particle(particle.x, particle.y, particle.yaw)
             diff_ranges = np.abs(np.array(subsampled_ranges)-np.array(particle_ranges))
+            rospy.loginfo(sys.getsizeof(particle_ranges))
             norm_error = np.linalg.norm(diff_ranges)
             error = pow(norm_error,2)
         return error
@@ -324,7 +331,12 @@ class ParticleFilter(object):
 
         # diff x,y position
         diff_position = position-last_position
+
+        """
+        #If wanted noise can be included in the odometry:
+
         diff_position += random.gauss(0, 0.1)*diff_position
+        """
 
         #add relative motion to commulated relativ motion which is used in next prediction
         self.dx += diff_position[0]
@@ -374,10 +386,9 @@ class ParticleFilter(object):
             y_in += self.weights[i] * y
             yaw_in += self.weights[i] * yaw
     
-        # transform best particle pose from hokuyo link to base link #time = 0.0005
+        # transform best particle pose from hokuyo link to base link (x = x_in-0.08)#time = 0.0005
         self.listener = tf.TransformListener()
         now = rospy.Time.now()
-        #self.listener.waitForTransform('/hokuyo_link', '/base_link', now, rospy.Duration(10.0))
         self.listener.waitForTransform('/base_link', '/hokuyo_link', now, rospy.Duration(10.0))
         pose_msg = PoseStamped()
         pose_msg.header.frame_id = '/base_link'
@@ -391,11 +402,6 @@ class ParticleFilter(object):
         new_pose = self.listener.transformPose('/hokuyo_link', pose_msg)
         x,y = new_pose.pose.position.x, new_pose.pose.position.y
         _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
-        """
-        x = x_in - 0.08
-        y=y_in
-        yaw = yaw_in
-        """
 
         return x, y, yaw
 
@@ -469,8 +475,7 @@ class MonteCarloLocalization(object):
         #measurement update
         self.lock.acquire()
         self.count_mcl += 1
-
-        if self.count_mcl == 2:#5Hz
+        if self.count_mcl == 8:#5Hz
             
             # mcl prediction and update
             self.pf.handle_observation(msg)
@@ -577,14 +582,18 @@ class MonteCarloLocalization(object):
 
     def run(self):
         rate = rospy.Rate(5) #measurement update with 5Hz
+        start = timer()
         while not rospy.is_shutdown():
             if self.odometry != None:
                 self._broadcast_frame_transformation()
                 self._publish()
             rate.sleep()
+            time = timer()-start
+            #if (time>10.0 and time<10.3) or (time>100.0 and time<100.3):
+                #self.pf.pr.print_stats()
 
 if __name__ == '__main__':
-    num_particles = 200
+    num_particles = 120
     mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
