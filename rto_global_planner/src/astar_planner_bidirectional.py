@@ -9,6 +9,7 @@ from geometry_msgs.msg import Twist, Point, Quaternion, Pose, PoseStamped, PoseW
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
+from rto_costmap_generator.srv import SwitchMaps, ClearMap
 
 #TODO:add threading
 #TODO:use initial position from amcl node
@@ -463,6 +464,7 @@ class main():
         # Initialize Publisher
         self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
         self.pub_plan = rospy.Publisher('/visualization/plan', Marker, queue_size=10)
+        self.pub_clearmap = rospy.Publisher('/clear_costmap', String, queue_size=1)
         # self.pub_cmd = rospy.Publisher('/cmd_vel',Twist, queue_size=10)
 
         # Initialize messages
@@ -549,20 +551,31 @@ class main():
             if self.check_valid(self.goal_x, self.goal_y):
 
                 end = (int(self.goal_x), int(self.goal_y))
-                path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
+                # path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
+                path = []
+
+                # check if there is a path
+                if not path:
+                    rospy.wait_for_service('clear_map')
+                    try:
+                        clear = rospy.ServiceProxy('clear_map', ClearMap)
+                        clear.call('clear')
+                    except rospy.ServiceException:
+                        rospy.loginfo('No path find, global costmap is initialized, please try agian')
 
                 # publish path
-                for pa in path:
-                    pose = PoseStamped()
-                    pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
-                    pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
-                    self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
-                    self.msg_path.poses.append(pose)
-                self.pub_plan.publish(self.msg_path_marker)
-                self.pub_path.publish(self.msg_path)
-                self.msg_path.poses.clear()
-                self.msg_path_marker.points.clear()
-                rospy.loginfo('Path is published')
+                else:
+                    for pa in path:
+                        pose = PoseStamped()
+                        pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
+                        pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
+                        self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
+                        self.msg_path.poses.append(pose)
+                    self.pub_plan.publish(self.msg_path_marker)
+                    self.pub_path.publish(self.msg_path)
+                    self.msg_path.poses.clear()
+                    self.msg_path_marker.points.clear()
+                    rospy.loginfo('Path is published')
 
             else:
                 rospy.loginfo('Goal is not valid')
