@@ -273,6 +273,11 @@ class Bidirectional_Astar_Planner():
                 self.intersect.append(append.position)
         return self.intersect
 
+    def check_no_path(self):
+        """
+        This method is to check if there is a path from current position to goal position
+        """
+
     def search_start(self, minF, offsetX, offsetY):
         """
         search action for next step and add this node to openlist
@@ -282,6 +287,10 @@ class Bidirectional_Astar_Planner():
 
         # if the offset is out of boundary
         if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
+            return
+
+        # if the offset is valid
+        elif self.map[node_pos[0]][node_pos[1]] > 50:
             return
 
         # if the node is in closed set, then pass
@@ -323,6 +332,10 @@ class Bidirectional_Astar_Planner():
 
         # if the offset is out of boundary
         if node_pos[0] > self.map_width - 1 or node_pos[0] < 0 or node_pos[1] > self.map_height - 1 or node_pos[1] < 0:
+            return
+
+        # if the offset is valid
+        elif self.map[node_pos[0]][node_pos[1]] > 50:
             return
 
         # if the node is in closed set, then pass
@@ -381,6 +394,13 @@ class Bidirectional_Astar_Planner():
 
         # try to find the path with minimal cost
         while True:
+
+            # check if open list is empty
+            length_open_list_start = len(self.open_list_start)
+            length_open_list_end = len(self.open_list_end)
+            if length_open_list_start == 0 or length_open_list_end == 0:
+                path = []
+                return path
 
             # find the node with minimal f in openlist
             minF_start = self.getMinNode(self.open_list_start)
@@ -464,7 +484,6 @@ class main():
         # Initialize Publisher
         self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
         self.pub_plan = rospy.Publisher('/visualization/plan', Marker, queue_size=10)
-        self.pub_clearmap = rospy.Publisher('/clear_costmap', String, queue_size=1)
         # self.pub_cmd = rospy.Publisher('/cmd_vel',Twist, queue_size=10)
 
         # Initialize messages
@@ -527,7 +546,8 @@ class main():
         if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             # rospy.logwarn('Goal is out of boundary')
             return None
-        elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
+        # elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
+        elif self.map[int(goalx)][int(goaly)] < 90:
             return True
         else:
             return None
@@ -551,16 +571,17 @@ class main():
             if self.check_valid(self.goal_x, self.goal_y):
 
                 end = (int(self.goal_x), int(self.goal_y))
-                # path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
-                path = []
+                path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
                 # check if there is a path
                 if not path:
                     rospy.wait_for_service('clear_map')
                     try:
-                        clear = rospy.ServiceProxy('clear_map', ClearMap)
-                        clear.call('clear')
+                        clear_client = rospy.ServiceProxy('clear_map', ClearMap)
+                        clear_client.call("clear")
+                        # rospy.loginfo('No path find, global costmap is initialized, please try agian')
                     except rospy.ServiceException:
+                        # rospy.loginfo('No path between start and goal')
                         rospy.loginfo('No path find, global costmap is initialized, please try agian')
 
                 # publish path
