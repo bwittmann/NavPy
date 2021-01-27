@@ -47,6 +47,10 @@ class DWALocalPlanner():
         # Init mutex
         self.lock = Lock()
 
+        # Init tf listener
+        self.listener = tf.TransformListener()
+        #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
+
         # Get params from parameter server
         self.min_lin_vel = rospy.get_param('~min_linear_vel')
         self.max_lin_vel = rospy.get_param('~max_linear_vel')
@@ -55,8 +59,11 @@ class DWALocalPlanner():
         self.max_acc = rospy.get_param('~max_acc')
         self.max_dec = rospy.get_param('~max_dec')
 
-        self.min_distance = rospy.get_param('~robot_diameter')/2
+        self.robot_radius = rospy.get_param('~robot_diameter')/2
+        self.safety_distance = rospy.get_param('~safety_distance')
         self.min_dist_goal = rospy.get_param('~min_dist_goal')
+        self.lookahead = rospy.get_param('~lookahead')
+        self.min_ang_vel_change = rospy.get_param('~min_ang_vel_change')
 
         self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
         self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
@@ -71,16 +78,11 @@ class DWALocalPlanner():
         self.rec_circling_time = rospy.get_param('~rec_circling_time')
         self.rec_path_time = rospy.get_param('~rec_path_time')
 
-
-        self.lookahead = rospy.get_param('~lookahead')
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
         self.show_local_path = rospy.get_param('~show_path')
 
-        # Init tf listener
-        self.listener = tf.TransformListener()
-        #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
-
+    
         # Setup PoseStamped for transformation of points from frame /odom to /map
         self.pose = PoseStamped()
         self.pose.header.frame_id= '/odom'
@@ -283,7 +285,7 @@ class DWALocalPlanner():
 
     def _get_prox_to_obst_cost(self, traj, control_pair, obstacles):
         # Include the break distance according to the current linear velocity
-        threshold = self.min_distance + (control_pair[1]**2)/(2*self.max_dec)
+        threshold = self.robot_radius + self.safety_distance + (control_pair[1]**2)/(2*self.max_dec)
 
         traj = np.array(traj)
         traj_x, traj_y = traj[:, 0].reshape((-1, 1)), traj[:, 1].reshape((-1, 1))
@@ -322,6 +324,9 @@ class DWALocalPlanner():
         count_circling_pos = 0
         count_small_lin_vel = 0
         count_time = 0
+
+        # Init variable for checking change in angular velocity to avoid oscillating
+        prev_ang_vel = 0
 
         while not rospy.is_shutdown():
             start = time.time()
@@ -363,6 +368,7 @@ class DWALocalPlanner():
             if best_pair[1] < self.rec_min_lin_vel:    # based on small linear vel (0.005)
                 count_small_lin_vel += 1
                 if count_small_lin_vel == self.rec_min_lin_vel_time/self.dt:
+                    print('small linear vel')
                     self._init_recovery()
             else:
                 count_small_lin_vel = 0
@@ -377,11 +383,13 @@ class DWALocalPlanner():
             if count_circling_pos > self.rec_circling_time/self.dt or count_circling_neg > self.rec_circling_time/self.dt:
                 count_circling_pos = 0
                 count_circling_neg = 0
+                print('circling')
                 self._init_recovery()
 
             count_time += 1    # based on overall time
             if count_time == self.rec_path_time/self.dt:
                 count_time = 0
+                print('overall time')
                 self._init_recovery()
 
 
@@ -396,8 +404,16 @@ class DWALocalPlanner():
 
             # Publish velocity commands
             if self.follow_plan == True:
-                self.twist.linear.x = best_pair[1]
-                self.twist.angular.z = best_pair[0]
+                self.twist.linear.x = best_pair[1] 
+
+                # TODO: Think about this again
+                if abs(best_pair[0] - prev_ang_vel) > self.min_ang_vel_change:
+                    prev_ang_vel = best_pair[0]
+                    self.twist.angular.z = best_pair[0]
+                else:
+                    prev_ang_vel = 0
+                    self.twist.angular.z = 0
+
                 self.pub_cmd_vel.publish(self.twist)
 
             # Check if goal is reached based on distance between robot and goal
