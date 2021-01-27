@@ -77,7 +77,7 @@ class DWALocalPlanner():
         self.rec_min_lin_vel = rospy.get_param('~rec_min_lin_vel')
         self.rec_min_lin_vel_time = rospy.get_param('~rec_min_lin_vel_time')
         self.rec_circling_time = rospy.get_param('~rec_circling_time')
-        self.rec_path_time = rospy.get_param('~rec_path_time')
+        self.rec_path_time_factor = rospy.get_param('~rec_path_time_factor')
 
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
@@ -157,9 +157,6 @@ class DWALocalPlanner():
         self.follow_plan = True
         self.lock.release()
         rospy.loginfo('Local planner: Reveived a global path.')
-
-
-
 
 
     # TODO: try to reduce redundant scan points
@@ -288,7 +285,6 @@ class DWALocalPlanner():
         else: 
             return min_dist_to_path
 
-
     def _get_prox_to_obst_cost(self, traj, control_pair, obstacles):
         # Include the break distance according to the current linear velocity
         threshold = self.robot_radius + self.safety_distance + (control_pair[1]**2)/(2*self.max_dec)
@@ -317,6 +313,7 @@ class DWALocalPlanner():
         self.follow_plan = False
         self.twist.linear.x = 0
         self.twist.angular.z = 0
+        self.pub_cmd_vel.publish(self.twist)
 
         # Call add_local_map service
         rospy.wait_for_service('add_local_map')
@@ -330,7 +327,6 @@ class DWALocalPlanner():
         msg.pose.position.x = self.goal[0]
         msg.pose.position.y = self.goal[1]
         self.pub_goal.publish(msg)
-
 
     def run(self):
         # Init variables for recovery behaviour
@@ -400,26 +396,19 @@ class DWALocalPlanner():
                 print('circling')
                 self._init_recovery()
 
-            count_time += 1    # based on overall time
-            if count_time == self.rec_path_time/self.dt:
+            
+
+            count_time += 1    # based on execution time of the current path and its length
+            global_path_length = len(global_path)
+            if count_time == np.floor(self.rec_path_time_factor*global_path_length/self.dt) and global_path_length > 30:
                 count_time = 0
                 print('overall time')
                 self._init_recovery()
 
 
-            # Show messages for debugging
-            if self.debug_mode == True:
-                print('current v: ', np.round(ang_vel, 3), np.round(lin_vel, 3))
-                print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
-                print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
-                print('current pos: ', robot_state)
-                #print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
-                print('----------------------')
-
             # Publish velocity commands
             if self.follow_plan == True:
                 self.twist.linear.x = best_pair[1] 
-
                 # TODO: Think about this again
                 if abs(best_pair[0] - prev_ang_vel) > self.min_ang_vel_change:
                     prev_ang_vel = best_pair[0]
@@ -427,18 +416,15 @@ class DWALocalPlanner():
                 else:
                     prev_ang_vel = 0
                     self.twist.angular.z = 0
-
                 self.pub_cmd_vel.publish(self.twist)
 
             # Check if goal is reached based on distance between robot and goal
             if self._check_goal_reached(robot_state) == True:
                 rospy.loginfo('Local planner: Goal position reached.')
                 self.follow_plan = False
-
                 count_time = 0
                 count_circling_pos = 0
                 count_circling_neg = 0
-
                 self.twist.linear.x = 0
                 self.twist.angular.z = 0
                 self.pub_cmd_vel.publish(self.twist)
@@ -452,6 +438,16 @@ class DWALocalPlanner():
             elif self.show_local_path == True and self.follow_plan == False:
                 self.local_plan_marker.points.clear()
                 self.pub_local_path.publish(self.local_plan_marker)
+
+            # Show messages for debugging
+            if self.debug_mode == True:
+                print(self.rec_path_time_factor*global_path_length/self.dt, count_time, global_path_length, global_path_length > 10)
+                print('current v: ', np.round(ang_vel, 3), np.round(lin_vel, 3))
+                print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+                print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
+                print('current pos: ', robot_state)
+                #print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
+                print('----------------------')
 
             
             end = time.time()

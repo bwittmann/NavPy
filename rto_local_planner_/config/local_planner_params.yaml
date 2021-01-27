@@ -11,7 +11,7 @@ show_path: True
 lookahead: 2.5
 
 robot_diameter: 0.45
-safety_distance: 0.10
+safety_distance: 0.15
 
 # To avoid oscillating
 min_ang_vel_change: 0.05
@@ -59,7 +59,7 @@ gain_clearance: 15
 rec_min_lin_vel: 0.01
 rec_min_lin_vel_time: 1 # Unit s
 rec_circling_time: 40 # Unit s
-rec_path_time: 120 # Unit s
+rec_path_time_factor: 0.25
 
 # Distance from goal that is enough to declare goal reached
 min_dist_goal: 0.1
