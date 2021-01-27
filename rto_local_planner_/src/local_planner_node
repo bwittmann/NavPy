@@ -54,14 +54,22 @@ class DWALocalPlanner():
         self.max_ang_vel = rospy.get_param('~max_angular_vel')
         self.max_acc = rospy.get_param('~max_acc')
         self.max_dec = rospy.get_param('~max_dec')
+
         self.min_distance = rospy.get_param('~robot_diameter')/2
+        self.min_dist_goal = rospy.get_param('~min_dist_goal')
+
         self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
         self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
+
         self.gain_vel = rospy.get_param('~gain_vel')
         self.gain_prox_to_path = rospy.get_param('~gain_glob_path')
         self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
         self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
-        self.min_dist_goal = rospy.get_param('~min_dist_goal')
+
+        self.rec_min_lin_vel = rospy.get_param('~rec_min_lin_vel')
+        self.rec_min_lin_vel_time = rospy.get_param('~rec_min_lin_vel_time')
+        self.rec_circling_time = rospy.get_param('~rec_circling_time')
+
         self.lookahead = rospy.get_param('~lookahead')
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
@@ -69,7 +77,7 @@ class DWALocalPlanner():
 
         # Init tf listener
         self.listener = tf.TransformListener()
-        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
+        #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
 
         # Setup PoseStamped for transformation of points from frame /odom to /map
         self.pose = PoseStamped()
@@ -116,7 +124,7 @@ class DWALocalPlanner():
 
 
     def _cb_current_twist_and_pose(self, msg):
-        #self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))  #TODO: seems to be enought to state in init method
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))  #TODO: seems to be enought to state in init method
         self.lock.acquire()
 
         # Transform robot pose to from /odom to /map frame 
@@ -296,6 +304,12 @@ class DWALocalPlanner():
 
 
     def run(self):
+
+        # Init variables for recovery
+        count_circling_neg = 0
+        count_circling_pos = 0
+        count_small_lin_vel = 0
+
         while not rospy.is_shutdown():
             start = time.time()
 
@@ -333,9 +347,9 @@ class DWALocalPlanner():
                         best_traj = traj
 
             # Detect if the robot is 'stuck'
-            if best_pair[1] < 0.005:
-                count += 1
-                if count == 10:
+            if best_pair[1] < self.rec_min_lin_vel:    # based on small linear vel (0.005)
+                count_small_lin_vel += 1
+                if count_small_lin_vel == self.rec_min_lin_vel_time/self.dt:
                     rospy.loginfo('Local planner: Init recovery')
                     self.follow_plan = False
                     self.twist.linear.x = 0
@@ -345,14 +359,37 @@ class DWALocalPlanner():
                     msg.data = 'stuck'
                     self.pub_stuck.publish(msg)
             else:
-                count = 0
+                count_small_lin_vel = 0
+                
+            if np.sign(best_pair[0]) == -1:   # based on circling
+                count_circling_neg += 1
+                count_circling_pos = 0
+            else:
+                count_circling_pos += 1
+                count_circling_neg = 0
+
+            if count_circling_pos > self.rec_circling_time/self.dt or count_circling_neg > self.rec_circling_time/self.dt:
+                rospy.loginfo('Local planner: Init recovery')
+                count_circling_pos = 0
+                count_circling_neg = 0
+                self.follow_plan = False
+                self.twist.linear.x = 0
+                self.twist.angular.z = 0
+                self.pub_cmd_vel.publish(self.twist)
+                msg = String()
+                msg.data = 'stuck'
+                self.pub_stuck.publish(msg)
+
+            #count_time += 1    # based on overall time
+            #if count_time == 500:
+
 
             # Show messages for debugging
             if self.debug_mode == True:
                 print('current v: ', np.round(ang_vel, 3), np.round(lin_vel, 3))
-                print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
-                print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
-                print('current pos: ', robot_state)
+                #print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+                #print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
+                #print('current pos: ', robot_state)
                 #print(self._check_goal_reached(robot_state, global_path), self.follow_plan)
                 print('----------------------')
 
