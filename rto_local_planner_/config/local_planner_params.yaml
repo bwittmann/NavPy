@@ -2,7 +2,7 @@
 log_times: False
 
 # Return messages to the terminal that are relevant for debugging
-debug_mode: True
+debug_mode: False
 
 # Show a representation of the local path in rvis
 show_path: True
@@ -62,4 +62,4 @@ rec_circling_time: 40 # Unit s
 rec_path_time: 120 # Unit s
 
 # Distance from goal that is enough to declare goal reached
-min_dist_goal: 0.05
+min_dist_goal: 0.1
