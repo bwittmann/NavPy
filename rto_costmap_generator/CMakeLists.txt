@@ -60,6 +60,7 @@ add_service_files(
   FILES
   SwitchMaps.srv
   ClearMap.srv
+  AddLocalMap.srv
 )
 
 ## Generate actions in the 'action' folder

@@ -11,7 +11,7 @@ from threading import Thread, Lock
 from nav_msgs.msg import OccupancyGrid, Odometry
 from rto_map_server.srv import GetMap
 from geometry_msgs.msg import PoseWithCovarianceStamped, Point, PoseStamped
-from rto_costmap_generator.srv import SwitchMaps, ClearMap
+from rto_costmap_generator.srv import SwitchMaps, ClearMap, AddLocalMap
 from sensor_msgs.msg import LaserScan, PointCloud
 from std_msgs.msg import String
 
@@ -80,6 +80,9 @@ class CostmapGenerator():
         # Init mutex
         self.lock = Lock()
 
+        # Init tf listener
+        self.listener = tf.TransformListener()
+
         # Get parameters from parameter server
         self.map_nr = rospy.get_param('~init_map_nr')
         self.debug_mode = rospy.get_param('~debug_mode')
@@ -115,13 +118,12 @@ class CostmapGenerator():
         elif self.decay_type == 'linear':
             self.soft_padding = [int((100 - x)) for x in np.linspace(1, 99, decay_steps)]
         else:
-            rospy.logerr("Decay type '{}' is not defined.".format(self.decay_type))
+            rospy.logerr("Costmap generator: Decay type '{}' is not defined.".format(self.decay_type))
 
-        # Start the service to make the costmap gen switch maps
+        # Start the services
         self._start_switchmaps_service()
-
-        # Start the service that clears the global costmap
         self._start_clearmap_service()
+        self._start_addlocalmap_service()
 
         # Padd the static map based on parameters
         self._pad_static_map()
@@ -143,7 +145,7 @@ class CostmapGenerator():
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
         rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
-        rospy.Subscriber('/local_planner/stuck', String, self._cb_stuck)
+        #rospy.Subscriber('/local_planner/stuck', String, self._cb_stuck)
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
@@ -159,8 +161,6 @@ class CostmapGenerator():
         self.local_costmap.info.origin.orientation.z = 0
         self.local_costmap.info.origin.orientation.w = 1
 
-        # Init tf listener
-        self.listener = tf.TransformListener()
 
     def _cb_stuck(self, msg):
         self.lock.acquire()
@@ -221,7 +221,7 @@ class CostmapGenerator():
             self.static_map = get_map(self.map_nr).map
             return True
         except rospy.ServiceException:
-            rospy.logerr("Costmap generator could not receive map from map server.")
+            rospy.logerr("Costmap generator: Could not receive map from map server.")
             return False
 
     @threaded
@@ -240,6 +240,29 @@ class CostmapGenerator():
         rospy.Service('clear_map', ClearMap, self._handle_clear_map)
         rospy.spin()
 
+    @threaded
+    def _start_addlocalmap_service(self):
+        """
+        Private method that runs in a seperate thread and provides a ROS service.
+        """
+        rospy.Service('add_local_map', AddLocalMap, self._handle_add_local_map)
+        rospy.spin()
+
+    def _handle_add_local_map(self, req):
+        if req.command == 'stuck':
+            rospy.loginfo('Costmap generator: Adapted global costmap based on local costmap.')
+            global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
+            
+            for point in self.local_obstacles.points:
+                x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
+                y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
+                self._pad_point(global_costmap, (y, x))
+
+            self.static_map.data = global_costmap.ravel()
+            self.static_map.header.stamp = rospy.Time.now()
+            self.pub_global_costmap.publish(self.static_map)
+        return True
+    
     def _handle_switch_maps(self, req):
         """
         Handler method for the service 'switch_maps', which changes the map used for costmap
@@ -267,6 +290,7 @@ class CostmapGenerator():
             self._pad_static_map()
             self.static_map.header.stamp = rospy.Time.now()
             self.pub_global_costmap.publish(self.static_map)
+        return True
 
     def _pad_point(self, costmap, point):
         x, y = point
