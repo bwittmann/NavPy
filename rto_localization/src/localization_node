@@ -357,9 +357,9 @@ class ParticleFilter(object):
         x_new = particle.x + self.dx + nx
         y_new = particle.y + self.dy + ny
         if particle.yaw + self.dyaw + nyaw > pi:
-            yaw_new = -pi + self.dyaw + nyaw
+            yaw_new = 2 * -pi + particle.yaw + self.dyaw + nyaw
         elif particle.yaw + self.dyaw + nyaw< -pi:
-            yaw_new = pi + self.dyaw + nyaw
+            yaw_new = 2* pi + particle.yaw + self.dyaw + nyaw
         else:
             yaw_new = particle.yaw + self.dyaw + nyaw
 
