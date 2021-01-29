@@ -39,8 +39,9 @@ class ParticleFilter(object):
         #Particle Filter variables
         self.num_particles = num_particles
         self.eval_beams = eval_beams
-        self.particles = []
-        self.weights = [1/self.num_particles]*self.num_particles
+        self.particles = np.empty(self.num_particles, dtype=Particle)
+        #self.particles = []
+        self.weights = np.array([1/self.num_particles]*self.num_particles)
 
         # Occupancy grid map (self.ogm[x,y])
         self.ogm = occ_grid_map
@@ -138,22 +139,25 @@ class ParticleFilter(object):
         """
         function which initilizes num_particles of particles
         """
+
         for i in range(self.num_particles):
             x, y, yaw = self._get_random_free_space()
             particle = Particle(i, x, y, yaw)
-            self.particles.append(particle)
+            self.particles[i] = particle
+
 
 
     def handle_observation(self, laser_scan_msg): #time = 0.6
         """
         prediction and measurement update is started
         """
-        weights_not_normalized =[]
+        weights_not_normalized = np.zeros((self.num_particles))
         # calculate weights
-        for particle in self.particles:
-            particle.x, particle.y, particle.yaw = self._predict_odometry(particle)
-            error = self._get_prediction_error(laser_scan_msg, particle)
-            weights_not_normalized.append(exp(-error))
+        for i in range(self.num_particles):
+            self.particles[i].x, self.particles[i].y, self.particles[i].yaw = self._predict_odometry(self.particles[i])
+            error = self._get_prediction_error(laser_scan_msg, self.particles[i])
+            weights_not_normalized[i] = exp(-error)
+            #weights_not_normalized.append(exp(-error))
 
         #commulated relative motion until next prediction set to 0
         self.dx = 0
@@ -179,7 +183,8 @@ class ParticleFilter(object):
         """
         resample a new set of particles (systematic resampling)
         """
-        new_particles = []
+        new_particles = np.empty(self.num_particles, dtype=Particle)
+        #new_particles = []
         index = random.randint(0,self.num_particles-1)
         max_weight = max(self.weights)
         beta = 0
@@ -197,7 +202,7 @@ class ParticleFilter(object):
 
             particle = self.particles[index]
             new_particle = Particle(i, particle.x, particle.y, particle.yaw)
-            new_particles.append(new_particle)
+            new_particles[i] = new_particle
 
         self.particles = new_particles.copy()
 
@@ -366,8 +371,10 @@ class ParticleFilter(object):
         return x_new, y_new, yaw_new
 
     def get_position(self):
-        # max_index = np.argmax(self.weights)
-        # x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
+        """
+        max_index = np.argmax(self.weights)
+        x_in, y_in, yaw_in = self.ogm_to_map(self.particles[max_index].x, self.particles[max_index].y, self.particles[max_index].yaw)
+        """
         length = len(self.weights)
         x_in, y_in, yaw_in = 0, 0, 0
         for i in range(length):
@@ -403,9 +410,6 @@ class MonteCarloLocalization(object):
         rospy.init_node('monte_carlo_localization')
 
         self.lock = Lock()
-
-        # subsampled scan messages used for mcl
-        # self.count_mcl = 0
 
         #load map from map_loader_node
         rospy.wait_for_service('get_map')
