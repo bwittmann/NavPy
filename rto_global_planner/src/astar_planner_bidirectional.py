@@ -582,10 +582,13 @@ class main():
                         # rospy.loginfo('No path find, global costmap is initialized, please try agian')
                     except rospy.ServiceException:
                         # rospy.loginfo('No path between start and goal')
-                        rospy.loginfo('No path find, global costmap is initialized, please try agian')
+                        rospy.loginfo('No path find, global costmap is initialized, try agian')
+                        start = (self.pos_x, self.pos_y)
+                        path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
                 # publish path
-                else:
+                # else:
+                if path:
                     for pa in path:
                         pose = PoseStamped()
                         pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
@@ -597,6 +600,8 @@ class main():
                     self.msg_path.poses.clear()
                     self.msg_path_marker.points.clear()
                     rospy.loginfo('Path is published')
+                else:
+                    rospy.loginfo('There is no path between start and goal, please set another goal')
 
             else:
                 rospy.loginfo('Goal is not valid')
