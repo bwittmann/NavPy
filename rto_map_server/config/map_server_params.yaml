@@ -2,7 +2,7 @@
 maps_nr: 2
 
 # Dict consisting of parameters of the first map
-map1: {
+map2: {
   image: sim_simple.pgm,
   resolution: 0.050000,
   origin: [-3.246519, -3.028618, 0.000000],
@@ -15,10 +15,10 @@ map1: {
 # The second map should be called map2, the third map3, etc.
 
 # This map was added just for testing purposes
-map2: {
-  image: home-rd.pgm,
+map1: {
+  image: sim_simple1.pgm,
   resolution: 0.050000,
-  origin: [-20.000000, -20.000000, 0.000000],
+  origin: [-2.291273, -3.100561, 0.000000],
   negate: 0,
   occupied_thresh: 0.65,
   free_thresh: 0.196
