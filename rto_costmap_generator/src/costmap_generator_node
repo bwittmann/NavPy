@@ -112,11 +112,11 @@ class CostmapGenerator():
 
         # Set val of soft_padding based on decay type
         if self.decay_type == 'exponential':
-            self.soft_padding = [int(100*np.exp(-x)-1) for x in np.linspace(0, 3.9, decay_steps)]
+            self.soft_padding = [int(100*np.exp(-x)-2) for x in np.linspace(0, 3.506, decay_steps)]
         elif self.decay_type == 'reciprocal':
-            self.soft_padding = [int(1/(x + 0.0101)) for x in np.linspace(0, 0.9891, decay_steps)]
+            self.soft_padding = [int(1/(x + 0.0102)) for x in np.linspace(0, 0.9898, decay_steps)]
         elif self.decay_type == 'linear':
-            self.soft_padding = [int((100 - x)) for x in np.linspace(1, 99, decay_steps)]
+            self.soft_padding = [int((100 - x)) for x in np.linspace(2, 99, decay_steps)]
         else:
             rospy.logerr("Costmap generator: Decay type '{}' is not defined.".format(self.decay_type))
 
@@ -166,13 +166,18 @@ class CostmapGenerator():
         self.lock.acquire()
 
         if msg.data == 'stuck':
-            rospy.loginfo('Costmap generator: Adapted global costmap based on local costmap.')
+            rospy.loginfo('Costmap enerator: Adapted global costmap based on local costmap.')
+            rospy.loginfo('er')
             global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
             
             for point in self.local_obstacles.points:
                 x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
                 y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
                 self._pad_point(global_costmap, (y, x))
+
+
+            rospy.logerr('hahaha')
+            
 
             self.static_map.data = global_costmap.ravel()
             self.static_map.header.stamp = rospy.Time.now()
@@ -299,14 +304,14 @@ class CostmapGenerator():
         grid = np.ogrid[-x:self.static_map.info.height-x, -y:self.static_map.info.width-y]
 
         # Apply 'hard padding'
-        mask_hard_padding = grid[1]*grid[1] + grid[0]*grid[0] <= self.hard_padding * self.hard_padding
+        mask_hard_padding = (grid[1]*grid[1] + grid[0]*grid[0] <= self.hard_padding * self.hard_padding) & (costmap < self.padded_val)
         costmap[mask_hard_padding] = self.padded_val
 
         if self.apply_soft_padding == True:
             # Apply 'soft padding' for each step in the decay of the cost
             for idx, val in enumerate(self.soft_padding, start=1):
-                masks_soft_padding = ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx))) \
-                    & (costmap < val) & (costmap > -1) # Delete last statement to inc. performance
+                masks_soft_padding = (costmap < val) & (costmap > -1) \
+                    & ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx)))
                 costmap[masks_soft_padding] = val
 
     @timed
@@ -411,7 +416,7 @@ class CostmapGenerator():
                 point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
                     int(np.round(point.y / self.local_costmap.info.resolution, 0)))
                 try:
-                    local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100
+                    local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 101
                 except:
                     pass
 

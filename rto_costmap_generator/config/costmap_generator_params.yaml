@@ -11,11 +11,11 @@ debug_mode: False
 # of the robot for the task of path planning.
 global_costmap: {
   robot_diameter: 0.45,
-  safety_distance: 0.10,
-  padded_val: 100,
+  safety_distance: 0.1,
+  padded_val: 99,
   apply_soft_padding: True,
   decay_distance: 0.2,
-  decay_type: exponential # Linear, exponential, reciprocal
+  decay_type: exponential # linear, exponential, reciprocal
 }
 
 # Params necessary for the generation of the local_costmap, which is needed by the
