@@ -396,11 +396,9 @@ class DWALocalPlanner():
                 print('circling')
                 self._init_recovery()
 
-            
-
             count_time += 1    # based on execution time of the current path and its length
             global_path_length = len(global_path)
-            if count_time == np.floor(self.rec_path_time_factor*global_path_length/self.dt) and global_path_length > 30:
+            if count_time == np.floor(self.rec_path_time_factor*global_path_length/self.dt) and global_path_length > 40:
                 count_time = 0
                 print('overall time')
                 self._init_recovery()
@@ -441,7 +439,7 @@ class DWALocalPlanner():
 
             # Show messages for debugging
             if self.debug_mode == True:
-                print(self.rec_path_time_factor*global_path_length/self.dt, count_time, global_path_length, global_path_length > 10)
+                print(self.rec_path_time_factor*global_path_length/self.dt, count_time, global_path_length, global_path_length > 40)
                 print('current v: ', np.round(ang_vel, 3), np.round(lin_vel, 3))
                 print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
                 print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
