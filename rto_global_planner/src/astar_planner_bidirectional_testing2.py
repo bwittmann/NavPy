@@ -9,6 +9,7 @@ from geometry_msgs.msg import Twist, Point, Quaternion, Pose, PoseStamped, PoseW
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
 from visualization_msgs.msg import Marker
+from rto_costmap_generator.srv import SwitchMaps, ClearMap
 
 #TODO:add threading
 #TODO:use initial position from amcl node
@@ -272,6 +273,11 @@ class Bidirectional_Astar_Planner():
                 self.intersect.append(append.position)
         return self.intersect
 
+    def check_no_path(self):
+        """
+        This method is to check if there is a path from current position to goal position
+        """
+
     def search_start(self, minF, offsetX, offsetY):
         """
         search action for next step and add this node to openlist
@@ -389,6 +395,13 @@ class Bidirectional_Astar_Planner():
         # try to find the path with minimal cost
         while True:
 
+            # check if open list is empty
+            length_open_list_start = len(self.open_list_start)
+            length_open_list_end = len(self.open_list_end)
+            if length_open_list_start == 0 or length_open_list_end == 0:
+                path = []
+                return path
+
             # find the node with minimal f in openlist
             minF_start = self.getMinNode(self.open_list_start)
             minF_end = self.getMinNode(self.open_list_end)
@@ -464,7 +477,7 @@ class main():
         rospy.wait_for_message('/global_costmap', OccupancyGrid)
         # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
         self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
-        #self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
+        # self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
         self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
@@ -534,7 +547,8 @@ class main():
         if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             # rospy.logwarn('Goal is out of boundary')
             return None
-        elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
+        # elif self.map[int(goalx)][int(goaly)] < 90 and self.map[int(goalx)][int(goaly)] > -1:
+        elif self.map[int(goalx)][int(goaly)] < 90:
             return True
         else:
             return None
@@ -550,8 +564,8 @@ class main():
 
             # initialize start node
             #TODO:replace initial position using amcl
-            #self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
-            #self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
+            # self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
+            # self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
             start = (self.pos_x, self.pos_y)
             # print('start is ',self.posx, self.posy)
 
@@ -560,18 +574,30 @@ class main():
                 end = (int(self.goal_x), int(self.goal_y))
                 path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
+                # check if there is a path
+                if not path:
+                    rospy.wait_for_service('clear_map')
+                    try:
+                        clear_client = rospy.ServiceProxy('clear_map', ClearMap)
+                        clear_client.call("clear")
+                        # rospy.loginfo('No path find, global costmap is initialized, please try agian')
+                    except rospy.ServiceException:
+                        # rospy.loginfo('No path between start and goal')
+                        rospy.loginfo('No path find, global costmap is initialized, please try agian')
+
                 # publish path
-                for pa in path:
-                    pose = PoseStamped()
-                    pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
-                    pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
-                    self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
-                    self.msg_path.poses.append(pose)
-                self.pub_plan.publish(self.msg_path_marker)
-                self.pub_path.publish(self.msg_path)
-                self.msg_path.poses.clear()
-                self.msg_path_marker.points.clear()
-                rospy.loginfo('Path is published')
+                else:
+                    for pa in path:
+                        pose = PoseStamped()
+                        pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
+                        pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
+                        self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
+                        self.msg_path.poses.append(pose)
+                    self.pub_plan.publish(self.msg_path_marker)
+                    self.pub_path.publish(self.msg_path)
+                    self.msg_path.poses.clear()
+                    self.msg_path_marker.points.clear()
+                    rospy.loginfo('Path is published')
 
             else:
                 rospy.loginfo('Goal is not valid')
