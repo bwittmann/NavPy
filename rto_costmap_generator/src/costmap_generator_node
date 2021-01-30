@@ -17,16 +17,12 @@ from std_msgs.msg import String
 
 # global costmap
 # TODO: Increase performance of _pad_static_map() -> constructing mask takes most of the time
-#       worse performance: np.greater()
 # TODO: Think about use of threads again.
 # TODO: Do we need a mutex for a service call?
-# TODO: Add service for changing global costmap? Static?
-# TODO: rospy.Time.now() seems to work now. Check also map_server
 
 # local costmap
+# TODO: fix the offset between global costmap and static map (self.record)
 # TODO: Perfectly synchronize messages from /scan and /amcl_pose
-# -> doesnt work yet, since not correctly implemented when using the existing amcl node
-#    (should work on our amcl node)
 
 
 # Create wrapper for easy timing of methods by using a decorator
@@ -55,25 +51,32 @@ class CostmapGenerator():
 
     Global costmap: OccupancyGrid based on static map from map server that has been padded in order to allow
                     the use of a point representation of the mobile robot for path planning. 
-                    There exist two types of padding: hard (val: 100) and soft padding (val: < 100). 
+                    There exist two types of padding: hard (val: 99) and soft padding (val: 98-1). 
                     Hard padded cells should under no circumstances be  visited by the robot while soft padded 
                     cells can be visited by the robot. Soft padded cells increase the cost that is estimated by 
                     the planning algorithm.
 
-    Local costmap: TODO
+    Local costmap:  OccupancyGrid based on the current measurements of the laser sensor. The local costmap should
+                    detect obstacles that are not appearing in the static map. Based on the recovery behaviour of the
+                    local planner, the local costmap gets absorbed into the global costmap to allow the robot to efficiently
+                    plan its path around the new appearing obstacles.
 
-    The CostmapGenerator class implements a service called 'switch_maps'.
-    @request: Number of map (1, 2, etc.)
-    @response: Success
+    Service 'switch_maps'
+    @request: map_nr_switch [int8]
+    @response: success [bool]
 
-    The CostmapGenerator class implements a service called 'clear_map'.
-    @request: 'clear'
-    @response: Success    
+    Service 'clear_map'
+    @request: command [string]
+    @response: success [bool]
+
+    Service 'add_local_map'
+    @request: command [string]
+    @response: success [bool]   
     """
 
     def __init__(self):
         """
-        Method for initialization of an instance of the CostmapGenerator class. It for example
+        Method for initialization of an instance of the CostmapGenerator class. It, for example,
         reads in parameters from a parameter server, initializes the publisher and estimates the 
         decay of soft padding based on the decay type.
         """
@@ -121,11 +124,11 @@ class CostmapGenerator():
             rospy.logerr("Costmap generator: Decay type '{}' is not defined.".format(self.decay_type))
 
         # Start the services
-        self._start_switchmaps_service()
-        self._start_clearmap_service()
-        self._start_addlocalmap_service()
+        self._start_switch_maps_service()
+        self._start_clear_map_service()
+        self._start_add_local_map_service()
 
-        # Padd the static map based on parameters
+        # Pad the static map based on parameters
         self._pad_static_map()
 
         # Publish padded map on topic /global_costmap (latched)
@@ -148,11 +151,11 @@ class CostmapGenerator():
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
-        self.local_costmap.header.frame_id = 'map'  # should be map frame here
+        self.local_costmap.header.frame_id = 'map'
         self.local_costmap.info.resolution = self.static_map.info.resolution
         self.local_costmap.info.height = lc_grid_length
         self.local_costmap.info.width = lc_grid_length
-        self.local_costmap.info.origin.position.x = self.current_pose[0] - self.lc_length / 2 # Take in account that robot is in the middle of the map
+        self.local_costmap.info.origin.position.x = self.current_pose[0] - self.lc_length / 2 # Robot is in the middle of the map
         self.local_costmap.info.origin.position.y = self.current_pose[1] - self.lc_length / 2
         self.local_costmap.info.origin.position.z = 0
         self.local_costmap.info.origin.orientation.x = 0
@@ -160,9 +163,13 @@ class CostmapGenerator():
         self.local_costmap.info.origin.orientation.z = 0
         self.local_costmap.info.origin.orientation.w = 1
 
-
     def _cb_current_pose(self, msg):
-        self.record = True  # TODO: necessay?
+        """
+        A callback function for retrieving the pose of the robot.
+
+        @param msg: Message of the type Odometry.
+        """
+        #self.record = True  # TODO: necessay?
 
         # Transform robot pose to from /odom to /map frame 
         self.listener.waitForTransform('/map', '/odom', rospy.Time(0), rospy.Duration(10))
@@ -181,10 +188,15 @@ class CostmapGenerator():
         self.lock.release()
 
         rospy.sleep(1/(self.lc_freq_scan - 1)) # To ensure that pose and scan msgs are alligned.
-        self.record = False
+        #self.record = False
 
     def _cb_scan(self, msg):
-        if self.record == True:
+        """
+        A callback function for retrieving the output of the laser scanner.
+
+        @param msg: Message of the type LaserScan.
+        """
+        if True:#self.record == True:
             self.lock.acquire()
             self.scan = msg
             self.lock.release()
@@ -194,7 +206,7 @@ class CostmapGenerator():
         Private method for calling the 'get_map' service from the map server to obtain a static map, 
         which represents the basis of a costmap.
 
-        @return: A boolean indicating the success of the service call
+        @return: A boolean, indicating the success of the service call
         """
         rospy.wait_for_service('get_map')
         get_map = rospy.ServiceProxy('get_map', GetMap)
@@ -206,34 +218,42 @@ class CostmapGenerator():
             return False
 
     @threaded
-    def _start_switchmaps_service(self):
+    def _start_switch_maps_service(self):
         """
-        Private method that runs in a seperate thread and provides a ROS service.
+        Private method that runs in a seperate thread and provides the ROS service 'switch_maps'.
         """
         rospy.Service('switch_maps', SwitchMaps, self._handle_switch_maps)
         rospy.spin()
 
     @threaded
-    def _start_clearmap_service(self):
+    def _start_clear_map_service(self):
         """
-        Private method that runs in a seperate thread and provides a ROS service.
+        Private method that runs in a seperate thread and provides the ROS service 'clear_map'.
         """
         rospy.Service('clear_map', ClearMap, self._handle_clear_map)
         rospy.spin()
 
     @threaded
-    def _start_addlocalmap_service(self):
+    def _start_add_local_map_service(self):
         """
-        Private method that runs in a seperate thread and provides a ROS service.
+        Private method that runs in a seperate thread and provides the ROS service 'add_local_map'.
         """
         rospy.Service('add_local_map', AddLocalMap, self._handle_add_local_map)
         rospy.spin()
 
     def _handle_add_local_map(self, req):
+        """
+        Handler method for the service 'add_local_map', which adds the information of the local costmap
+        to the global costmap and pads the new appearing obstacles.
+
+        @param req: A string referring to the command to be executed.
+        @return: A boolean indicating the success of the operation.
+        """
         if req.command == 'stuck':
             rospy.loginfo('Costmap generator: Adapted global costmap based on local costmap.')
             global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
             
+            # Add local obstacles to the global costmap and pad them.
             for point in self.local_obstacles.points:
                 x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
                 y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
@@ -243,7 +263,10 @@ class CostmapGenerator():
             self.static_map.data = global_costmap.ravel()
             self.static_map.header.stamp = rospy.Time.now()
             self.pub_global_costmap.publish(self.static_map)
-        return True
+            return True
+        else:
+            rospy.logerr("Costmap generator: Unknown command for 'add_local_map' service.")
+            return False
     
     def _handle_switch_maps(self, req):
         """
@@ -254,27 +277,49 @@ class CostmapGenerator():
         @return: A boolean indicating the success of the operation.
         """
         self.map_nr = req.map_nr_switch
+
+        # Try to get map from map server
         success = self._call_get_map_srv()
+
         if success == True:
             rospy.loginfo('Costmap generator: Changed map in map server to map{}.'.format(self.map_nr))
-
             self._pad_static_map()
-
             self.static_map.header.stamp = rospy.Time.now()
             self.pub_global_costmap.publish(self.static_map)
-
-        return success
+            return True
+        else:
+            rospy.logerr("Costmap generator: Unknown command for 'switch_maps' service.")
+            return False
 
     def _handle_clear_map(self, req):
+        """
+        Handler method for the service 'clear_map', which clears the global costmap and resets
+        it to the original state.
+
+        @param req: A string referring to the command to be executed.
+        @return: A boolean indicating the success of the operation.
+        """
         if req.command == 'clear':
             rospy.loginfo('Costmap generator: Global costmap has been cleared.')
+
+            # Get the plain map from the map server and pad it.
             self._call_get_map_srv()
             self._pad_static_map()
+
             self.static_map.header.stamp = rospy.Time.now()
             self.pub_global_costmap.publish(self.static_map)
-        return True
+            return True
+        else:
+            rospy.logerr("Costmap generator: Unknown command for 'clear_map' service.")
+            return False
 
     def _pad_point(self, costmap, point):
+        """
+        Private method that padds one point on a costmap.
+
+        @param costmap: The np.array in which the point should be padded.
+        @param point: Tuple consisting of the x and y coordinates of the point to be padded.
+        """
         x, y = point
 
         # Use 'open grid' function to create a 'circular' mask for efficient padding
@@ -285,7 +330,7 @@ class CostmapGenerator():
         costmap[mask_hard_padding] = self.padded_val
 
         if self.apply_soft_padding == True:
-            # Apply 'soft padding' for each step in the decay of the cost
+            # Apply 'soft padding' for each step in the soft_padding list (decay steps)
             for idx, val in enumerate(self.soft_padding, start=1):
                 masks_soft_padding = (costmap < val) & (costmap > -1) \
                     & ((grid[1]*grid[1] + grid[0]*grid[0] <= (self.hard_padding + idx) * (self.hard_padding + idx)))
@@ -300,7 +345,6 @@ class CostmapGenerator():
 
         # Get index of occupied cells
         occupied_index = np.where(global_costmap == 100)
-        #rospy.loginfo(len(occupied_index[0]))
 
         # Loop over occupied cells and pad them
         for coord in zip(occupied_index[0], occupied_index[1]):
@@ -309,24 +353,26 @@ class CostmapGenerator():
         # Show messages for debugging
         if self.debug_mode == True:
             # Receive an image of the global_costmap
-            cv2.imwrite('map_padded_comp.jpg', global_costmap.astype(np.uint8))
+            cv2.imwrite('map_padded.jpg', global_costmap.astype(np.uint8))
             print(np.unique(global_costmap))
 
         self.static_map.data = global_costmap.ravel()
 
-    # TODO: fix the offset between global costmap and static map
     def generate_local_costmap_and_obstacles(self):
-
+        """
+        Main method of the CostmapGenerator class. It creates and publishes the local costmap and a point cloud 
+        of the x and y coordinates of the sensed obstacles in the map frame.
+        """
         rospy.wait_for_message('/scan', LaserScan)
 
         # Initilize point cloud for transformations of obstacles
         pointcloud_hokuyo = PointCloud()
         pointcloud_hokuyo.header.frame_id = 'hokuyo_link'
 
-        # Initilize point cloud for transformations regarding local map
+        # Initilize point cloud for transformations regarding the visualization of the local map.
         pointcloud_local_costmap = PointCloud()
         pointcloud_local_costmap.header.frame_id = 'hokuyo_link'
-    
+
         # Set robot position to the middle of the grid map
         local_costmap_middle = int(self.local_costmap.info.height/2)
         robot_pos = (local_costmap_middle, local_costmap_middle)
@@ -335,29 +381,30 @@ class CostmapGenerator():
             start = time.time()
 
             # Get current values from subscribed topics
-            ranges = self.scan.ranges   # TODO: appears to have no self.scan sometimes.
+            ranges = self.scan.ranges 
             current_pose = self.current_pose
             min_angle = self.scan.angle_min
             angle_inc = self.scan.angle_increment
 
-            # Clear local_obstacle point cloud
+            # Clear point clouds
             pointcloud_hokuyo.points.clear()
             pointcloud_local_costmap.points.clear()
 
             # Clear local costmap
             local_costmap = np.zeros((self.local_costmap.info.height, self.local_costmap.info.height), dtype=np.int8)
 
-            for idx, element in enumerate(ranges):  # TODO: Think if it makes sense to transform to base_link before.
+            for idx, element in enumerate(ranges):
                 # Check if element would be in local_costmap
                 if element < self.lc_length/2:
                     angle = min_angle + idx * angle_inc
 
-                    # Get offset to laser sensor ('hokuyo_link' frame) in map frame (kind of)
-                    dx_local_map = np.cos(np.pi/2 - (angle + current_pose[2])) * element
-                    dy_local_map = np.sin(np.pi/2 - (angle + current_pose[2])) * element      # TODO: problem for local costmap
-
+                    # Get position of the sensed element in the frame of the laser scanner.
                     dx = np.cos(angle) * element
                     dy = np.cos(np.pi/2 - angle) * element
+
+                    # Get position of the sensed element for visualization of the local costmap
+                    dx_local_map = np.cos(np.pi/2 - (angle + current_pose[2])) * element
+                    dy_local_map = np.sin(np.pi/2 - (angle + current_pose[2])) * element     
 
                     point_hokuyo_frame = Point()
                     point_hokuyo_frame.x = dx
@@ -388,7 +435,7 @@ class CostmapGenerator():
             pointcloud_odom.header.stamp = self.listener.getLatestCommonTime('/odom', '/map')
             pointcloud_map = self.listener.transformPointCloud('/map', pointcloud_odom)
 
-            # Add point that has been transformed to base_link to local costmap.
+            # Add points of the local costmap that have been transformed for visualization purposes
             for point in pointcloud_local_costmap.points:
                 point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
                     int(np.round(point.y / self.local_costmap.info.resolution, 0)))
@@ -414,8 +461,7 @@ class CostmapGenerator():
 
 
 if __name__ == "__main__":
-
-    # Initialize a ROS node named map_server
+    # Initialize a ROS node named costmap_generator
     rospy.init_node('costmap_generator')
 
     log_times = rospy.get_param('~log_times')
