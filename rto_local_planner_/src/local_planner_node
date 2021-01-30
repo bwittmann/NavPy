@@ -13,14 +13,11 @@ from visualization_msgs.msg import Marker
 from std_msgs.msg import String
 from rto_costmap_generator.srv import AddLocalMap
 
-np.set_printoptions(precision=4)
-np.set_printoptions(suppress=True)
-np.set_printoptions(linewidth=130)
-
 
 # TODO: Make use of log_times param
 # TODO: enable run based on odometry?
 # TODO: make messages regarding timing consistant
+
 
 def timed(func):
     def wrapper(*args):
@@ -38,7 +35,6 @@ def threaded(fn):
     def wrapper(*args):
         Thread(target=fn, args=args).start()
     return wrapper
-
 
 
 class DWALocalPlanner():
@@ -78,6 +74,7 @@ class DWALocalPlanner():
         self.rec_min_lin_vel_time = rospy.get_param('~rec_min_lin_vel_time')
         self.rec_circling_time = rospy.get_param('~rec_circling_time')
         self.rec_path_time_factor = rospy.get_param('~rec_path_time_factor')
+        self.rec_path_length = rospy.get_param('~rec_path_length')
 
         self.debug_mode = rospy.get_param('~debug_mode')
         self.log_times = rospy.get_param('~log_times')
@@ -308,8 +305,8 @@ class DWALocalPlanner():
         else:
             return 1/min_distance_measured
 
-    def _init_recovery(self):
-        rospy.loginfo('Local planner: Init recovery')
+    def _init_recovery(self, reason):
+        rospy.loginfo('Local planner: Init recovery ({})'.format(reason))
         self.follow_plan = False
         self.twist.linear.x = 0
         self.twist.angular.z = 0
@@ -336,7 +333,7 @@ class DWALocalPlanner():
         count_time = 0
 
         # Init variable for checking change in angular velocity to avoid oscillating
-        prev_ang_vel = 0
+        # prev_ang_vel = 0
 
         while not rospy.is_shutdown():
             start = time.time()
@@ -375,11 +372,10 @@ class DWALocalPlanner():
                         best_traj = traj
 
             # Detect if the robot is 'stuck'
-            if best_pair[1] < self.rec_min_lin_vel:    # based on small linear vel (0.005)
+            if best_pair[1] < self.rec_min_lin_vel:    # based on small linear vel
                 count_small_lin_vel += 1
                 if count_small_lin_vel == self.rec_min_lin_vel_time/self.dt:
-                    print('small linear vel')
-                    self._init_recovery()
+                    self._init_recovery('small linear vel')
             else:
                 count_small_lin_vel = 0
                 
@@ -393,27 +389,26 @@ class DWALocalPlanner():
             if count_circling_pos > self.rec_circling_time/self.dt or count_circling_neg > self.rec_circling_time/self.dt:
                 count_circling_pos = 0
                 count_circling_neg = 0
-                print('circling')
-                self._init_recovery()
+                self._init_recovery('circling')
 
             count_time += 1    # based on execution time of the current path and its length
             global_path_length = len(global_path)
-            if count_time == np.floor(self.rec_path_time_factor*global_path_length/self.dt) and global_path_length > 40:
+            if count_time == np.floor(self.rec_path_time_factor*global_path_length/self.dt) and global_path_length > self.rec_path_length:
                 count_time = 0
-                print('overall time')
-                self._init_recovery()
+                self._init_recovery('overall time')
 
 
             # Publish velocity commands
             if self.follow_plan == True:
-                self.twist.linear.x = best_pair[1] 
-                # TODO: Think about this again
-                if abs(best_pair[0] - prev_ang_vel) > self.min_ang_vel_change:
-                    prev_ang_vel = best_pair[0]
-                    self.twist.angular.z = best_pair[0]
-                else:
-                    prev_ang_vel = 0
-                    self.twist.angular.z = 0
+                self.twist.linear.x = best_pair[1]
+                self.twist.angular.z = best_pair[0] 
+                # TODO: Think about a better version
+                # if abs(best_pair[0] - prev_ang_vel) > self.min_ang_vel_change:
+                #     prev_ang_vel = best_pair[0]
+                #     self.twist.angular.z = best_pair[0]
+                # else:
+                #     prev_ang_vel = 0
+                #     self.twist.angular.z = 0
                 self.pub_cmd_vel.publish(self.twist)
 
             # Check if goal is reached based on distance between robot and goal
