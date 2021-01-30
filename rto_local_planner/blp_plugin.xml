@@ -1,7 +1,0 @@
-<library path="lib/libRTOLocalPlanner">
-  <class name="rto_local_planner/RTOLocalPlanner" type="rto_local_planner::RTOLocalPlanner" base_class_type="nav_core::BaseLocalPlanner">
-    <description>
-      RTO's custom local planner.
-    </description>
-  </class>
-</library>
