@@ -145,7 +145,6 @@ class CostmapGenerator():
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
         rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
-        #rospy.Subscriber('/local_planner/stuck', String, self._cb_stuck)
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
@@ -161,29 +160,6 @@ class CostmapGenerator():
         self.local_costmap.info.origin.orientation.z = 0
         self.local_costmap.info.origin.orientation.w = 1
 
-
-    def _cb_stuck(self, msg):
-        self.lock.acquire()
-
-        if msg.data == 'stuck':
-            rospy.loginfo('Costmap enerator: Adapted global costmap based on local costmap.')
-            rospy.loginfo('er')
-            global_costmap = np.array(self.static_map.data, dtype=np.int8).reshape(self.static_map.info.height, -1)
-            
-            for point in self.local_obstacles.points:
-                x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
-                y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
-                self._pad_point(global_costmap, (y, x))
-
-
-            rospy.logerr('hahaha')
-            
-
-            self.static_map.data = global_costmap.ravel()
-            self.static_map.header.stamp = rospy.Time.now()
-            self.pub_global_costmap.publish(self.static_map)
-
-        self.lock.release()
 
     def _cb_current_pose(self, msg):
         self.record = True  # TODO: necessay?
@@ -262,6 +238,7 @@ class CostmapGenerator():
                 x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
                 y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
                 self._pad_point(global_costmap, (y, x))
+                global_costmap[int(y), int(x)] = 100
 
             self.static_map.data = global_costmap.ravel()
             self.static_map.header.stamp = rospy.Time.now()
@@ -416,7 +393,7 @@ class CostmapGenerator():
                 point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
                     int(np.round(point.y / self.local_costmap.info.resolution, 0)))
                 try:
-                    local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 101
+                    local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100
                 except:
                     pass
 
