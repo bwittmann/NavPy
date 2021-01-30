@@ -1,7 +1,19 @@
-# States the number of maps provided by the map_server
+# Return debugging messages to the terminal.
+debug_mode: False
+
+# States the number of maps provided by the map_server.
 maps_nr: 2
 
-# Dict consisting of parameters of the first map
+# Dicts consisting of parameters of the included maps
+map1: {
+  image: sim_simple1.pgm,
+  resolution: 0.050000,
+  origin: [-2.291273, -3.100561, 0.000000],
+  negate: 0,
+  occupied_thresh: 0.65,
+  free_thresh: 0.196
+}
+
 map2: {
   image: sim_simple.pgm,
   resolution: 0.050000,
@@ -13,14 +25,4 @@ map2: {
 
 # To add more maps, append the .yaml file in the same style as map1.
 # The second map should be called map2, the third map3, etc.
-
-# This map was added just for testing purposes
-map1: {
-  image: sim_simple1.pgm,
-  resolution: 0.050000,
-  origin: [-2.291273, -3.100561, 0.000000],
-  negate: 0,
-  occupied_thresh: 0.65,
-  free_thresh: 0.196
-}
 

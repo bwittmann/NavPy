@@ -23,9 +23,9 @@ class MapServer():
     which is stored in the corresponding .yaml file. This map server also works with multiple maps, 
     which have to be added to the .yaml file in the config folder of this package.
 
-    The MapServer class implements a service called 'get_map'.
-    @request: Number of map (1, 2, etc.)
-    @response: OccupancyGrid
+    Service 'get_map'
+    @request: map_nr [int64]
+    @response: map [nav_msgs/OccupancyGrid]
     """
 
     def __init__(self):
@@ -34,18 +34,9 @@ class MapServer():
         from a parameter server and loads and converts images corresponding to maps from the maps 
         folder of this package to numpy arrays.
         """
-
-        # Version of passing yaml file as a arg instead of as a parameter.
-        # args = rospy.myargv(argv=sys.argv)
-        # One argument results in a list that has length 2. 
-        # First arg: path to node, second arg: actual passed argument
-        # if len(args) != 2:
-        #    rospy.logerr('Map server: Number of passed arguments does not match (1 required).')
-        #   sys.exit(1)
-        # yaml_path = args[1]
-
         # Get parameters from parameter server
         self.maps_nr = rospy.get_param('~maps_nr')
+        self.debug_mode = rospy.get_param('~debug_mode')
 
         # Init publisher
         self.pub_map = rospy.Publisher('/map', OccupancyGrid, queue_size=10, latch=True)
@@ -71,10 +62,9 @@ class MapServer():
 
             self.map_info['map' + str(map_nr)]['map_raw'] = map_raw
 
-
-        # Comment out for debugging
-        #print(self.map_info)
-        #cv2.imwrite('test.jpg', self.map_info['map1']['map_raw'])
+        if self.debug_mode == True:
+            print(self.map_info)
+            cv2.imwrite('map1.jpg', self.map_info['map1']['map_raw'])
 
         # Perpare messages for the service
         self._get_occupancy_grid()
@@ -87,7 +77,6 @@ class MapServer():
 
         # Clear dict to save space
         self.map_info.clear()
-
 
     def _get_occupancy_grid(self):
         """
@@ -117,7 +106,6 @@ class MapServer():
 
             self.occupancy_grids[key] = occupancy_grid
 
-
     def _handle_get_map(self, req):
         """
         Handler method for the service 'get_map', which returns the fitting OccupancyGrid to the
@@ -140,7 +128,6 @@ class MapServer():
 
             return self.occupancy_grids['map' + str(req.map_nr)]
 
-
     def start_server(self):
         """
         Main method of the MapServer class. Provides a service by creating a rospy.Service instance.
@@ -150,7 +137,6 @@ class MapServer():
 
 
 if __name__ == '__main__':
-
     # Initialize a ROS node named map_server
     rospy.init_node('map_server')
 
