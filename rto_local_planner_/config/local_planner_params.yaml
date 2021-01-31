@@ -67,7 +67,7 @@ rec_min_lin_vel_time: 5 # Unit s
 
 rec_circling_time: 10 # Unit s
 
-rec_path_time_factor: 100 #0.4 #0.25
+rec_path_time_factor: 0.4 #0.4 #0.25
 rec_path_length: 30 #40
 
 # Distance from goal that is enough to declare goal reached

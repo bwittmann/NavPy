@@ -416,7 +416,7 @@ class MonteCarloLocalization(object):
         rospy.wait_for_service('get_map')
         try:
             get_map = rospy.ServiceProxy('get_map', GetMap)
-            self.ogm = get_map(2)
+            self.ogm = get_map(1)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
 
@@ -440,9 +440,6 @@ class MonteCarloLocalization(object):
 
         #tf brodcaster for x, y, yaw difference between odom and map
         self.br = tf2_ros.TransformBroadcaster()
-        self.x_diff = 0
-        self.y_diff = 0
-        self.orientation_diff = [0,0,0,1]
 
         # Subscribers (LaserScan, Odometry)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1) # 40hz
@@ -457,22 +454,10 @@ class MonteCarloLocalization(object):
         #publish pose of best particle for global planer
         self.pub_pos = rospy.Publisher('/pose', PoseStamped, queue_size=1)
 
-    def get_difference_for_tf(self):
-        x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
-        orientation_particle = transform.quaternion_from_euler(0, 0, yaw_Particle_Filter)
-
-        # odometry pose
-        x_Odometry = self.odometry.pose.pose.position.x
-        y_Odometry = self.odometry.pose.pose.position.y
-        orientation_odometry = (self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z, self.odometry.pose.pose.orientation.w)
-
-        # difference between odometry and map
-        self.x_diff = x_Particle_Filter-x_Odometry
-        self.y_diff = y_Particle_Filter-y_Odometry
-        self.orientation_diff = transform.quaternion_multiply(transform.quaternion_inverse(orientation_odometry), orientation_particle)
-
     def laser_scan_callback (self, msg):
+
         # set min and max range, angle of laser
+        self.lock.acquire()
         if self.observation == None:
             self.pf.laser_min_angle = msg.angle_min
             self.pf.laser_max_angle = msg.angle_max
@@ -484,18 +469,47 @@ class MonteCarloLocalization(object):
             self.pf.subsampled_angles = subsampled_angles
 
         self.observation = msg
+        self.lock.release()
 
     def odometry_callback(self, msg): #20hz
-
+        self.lock.acquire()
         self.odometry = msg
+        self.lock.release()
 
     def global_costmap_callback(self, msg):
+        self.lock.acquire()
         global_costmap = msg.data
         global_costmap = np.transpose(np.asarray(msg.data, dtype=np.int8).reshape(msg.info.height, msg.info.width))
         global_costmap[global_costmap!=100]=0
         self.pf.ogm_map=global_costmap
-        start = timer()
+        self.lock.release()
+        
+    def _broadcast_frame_transformation(self, odometry_for_tf):
+        x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
+        orientation_particle = transform.quaternion_from_euler(0, 0, yaw_Particle_Filter)
 
+        # odometry pose
+        x_Odometry = odometry_for_tf.pose.pose.position.x
+        y_Odometry = odometry_for_tf.pose.pose.position.y
+        orientation_odometry = (odometry_for_tf.pose.pose.orientation.x, odometry_for_tf.pose.pose.orientation.y, odometry_for_tf.pose.pose.orientation.z, odometry_for_tf.pose.pose.orientation.w)
+
+        # difference between odometry and map
+        x_diff = x_Particle_Filter-x_Odometry
+        y_diff = y_Particle_Filter-y_Odometry
+        orientation_diff = transform.quaternion_multiply(transform.quaternion_inverse(orientation_odometry), orientation_particle)
+
+        broadcast_msg = TransformStamped()
+        broadcast_msg.header.stamp = rospy.Time.now()
+        broadcast_msg.header.frame_id = "map"
+        broadcast_msg.child_frame_id = "odom"
+        broadcast_msg.transform.translation.x = x_diff
+        broadcast_msg.transform.translation.y = y_diff
+        broadcast_msg.transform.translation.z = 0.0
+        broadcast_msg.transform.rotation.x = orientation_diff[0]
+        broadcast_msg.transform.rotation.y = orientation_diff[1]
+        broadcast_msg.transform.rotation.z = orientation_diff[2]
+        broadcast_msg.transform.rotation.w = orientation_diff[3]
+        self.br.sendTransform(broadcast_msg)
 
     def _publish(self):
         """
@@ -552,33 +566,16 @@ class MonteCarloLocalization(object):
         pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw)
         self.pub_pos.publish(pose)
 
-    # broadcast diff odom and map
-    def _broadcast_frame_transformation(self):
-        broadcast_msg = TransformStamped()
-        broadcast_msg.header.stamp = rospy.Time.now()
-        broadcast_msg.header.frame_id = "map"
-        broadcast_msg.child_frame_id = "odom"
-        broadcast_msg.transform.translation.x = self.x_diff
-        broadcast_msg.transform.translation.y = self.y_diff
-        broadcast_msg.transform.translation.z = 0.0
-        broadcast_msg.transform.rotation.x = self.orientation_diff[0]
-        broadcast_msg.transform.rotation.y = self.orientation_diff[1]
-        broadcast_msg.transform.rotation.z = self.orientation_diff[2]
-        broadcast_msg.transform.rotation.w = self.orientation_diff[3]
-        self.br.sendTransform(broadcast_msg)
-
     def run(self):
         rate = rospy.Rate(5) #measurement update with 5Hz
         while not rospy.is_shutdown():
             if self.odometry != None:
-                self.lock.acquire()
                 if self.last_odometry:
                     self.pf.handle_odometry(self.odometry, self.last_odometry)
                 self.last_odometry = self.odometry
+                odometry_for_tf=self.odometry #capture odom_message and scan_message at same timestamp for TF
                 self.pf.handle_observation(self.observation)
-                self.get_difference_for_tf()
-                self.lock.release()
-                self._broadcast_frame_transformation()
+                self._broadcast_frame_transformation(odometry_for_tf)
                 self._publish()
             rate.sleep()
 
