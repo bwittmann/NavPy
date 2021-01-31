@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 import os
 import time
-import tf
+import tf 
 
 from threading import Thread, Lock
 from nav_msgs.msg import OccupancyGrid, Odometry
@@ -19,7 +19,6 @@ from std_msgs.msg import String
 # TODO: Increase performance of _pad_static_map() -> constructing mask takes most of the time
 # TODO: Think about use of threads again.
 # TODO: Do we need a mutex for a service call?
-
 # local costmap
 # TODO: fix the offset between global costmap and static map (self.record)
 # TODO: Perfectly synchronize messages from /scan and /amcl_pose
@@ -77,7 +76,7 @@ class CostmapGenerator():
     def __init__(self):
         """
         Method for initialization of an instance of the CostmapGenerator class. It, for example,
-        reads in parameters from a parameter server, initializes the publisher and estimates the 
+        reads in parameters from a parameter server, initializes publishers and estimates the 
         decay of soft padding based on the decay type.
         """
         # Init mutex
