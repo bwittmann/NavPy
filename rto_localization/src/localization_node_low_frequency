@@ -73,6 +73,9 @@ class ParticleFilter(object):
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
+        self.ddx = 0
+        self.ddy = 0
+        self.ddyaw = 0
 
         # uncertainty for dynamic and sensormodel
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
@@ -161,9 +164,9 @@ class ParticleFilter(object):
             #weights_not_normalized.append(exp(-error))
 
         #commulated relative motion until next prediction set to 0
-        self.dx = 0
-        self.dy = 0
-        self.dyaw = 0
+        self.ddx = 0
+        self.ddy = 0
+        self.ddyaw = 0
 
         # normalize weights
         weights_new = [i/sum(weights_not_normalized) for i in weights_not_normalized]
@@ -403,6 +406,36 @@ class ParticleFilter(object):
 
         return x, y, yaw
 
+    def handle_odometry_prediction(self, odom, last_odom):
+        """
+        get odometry difference every step
+        """
+        position = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z])
+        last_position = np.array([last_odom.pose.pose.position.x, last_odom.pose.pose.position.y, last_odom.pose.pose.position.z])
+        orientation = np.array([odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w])
+        last_orientation = np.array([last_odom.pose.pose.orientation.x, last_odom.pose.pose.orientation.y, last_odom.pose.pose.orientation.z, last_odom.pose.pose.orientation.w])
+
+        # diff yaw (current orientation * inverse last orientation)
+        diff_orientation_quaternion = transform.quaternion_multiply(transform.quaternion_inverse(last_orientation), orientation)
+        _, _, yaw_diff = transform.euler_from_quaternion(diff_orientation_quaternion) #clockwise rotation is negative
+
+        # diff x,y position
+        diff_position = position-last_position
+
+        self.ddx = diff_position[0]
+        self.ddy = diff_position[1]
+        self.ddyaw = yaw_diff
+
+    def odom_prediction(self, current_x, current_y, current_yaw):
+        """
+        predict using odometry position
+        """
+        x = current_x + self.ddx
+        y = current_y + self.ddy
+        yaw = current_yaw + self.ddyaw
+
+        return x, y ,yaw
+
 class MonteCarloLocalization(object):
 
     #initializes object of MonteCarloLocalization and sets all parameters
@@ -423,11 +456,9 @@ class MonteCarloLocalization(object):
         # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
+        self.last_odometry_sub = None
         self.observation = None
         self.eval_beams = 15
-        self.x_diff = None
-        self.y_diff = None
-        self.orientation_diff = None
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -488,7 +519,8 @@ class MonteCarloLocalization(object):
         self.lock.release()
 
     def _broadcast_frame_transformation(self, odometry_for_tf):
-        x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
+        # x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter = self.pf.get_position()
+        x_Particle_Filter, y_Particle_Filter, yaw_Particle_Filter =  self.x_now, self.y_now, self.yaw_now
         orientation_particle = transform.quaternion_from_euler(0, 0, yaw_Particle_Filter)
 
         # odometry pose
@@ -497,36 +529,21 @@ class MonteCarloLocalization(object):
         orientation_odometry = (odometry_for_tf.pose.pose.orientation.x, odometry_for_tf.pose.pose.orientation.y, odometry_for_tf.pose.pose.orientation.z, odometry_for_tf.pose.pose.orientation.w)
 
         # difference between odometry and map
-        self.x_diff = x_Particle_Filter-x_Odometry
-        self.y_diff = y_Particle_Filter-y_Odometry
-        self.orientation_diff = transform.quaternion_multiply(transform.quaternion_inverse(orientation_odometry), orientation_particle)
+        x_diff = x_Particle_Filter-x_Odometry
+        y_diff = y_Particle_Filter-y_Odometry
+        orientation_diff = transform.quaternion_multiply(transform.quaternion_inverse(orientation_odometry), orientation_particle)
 
         broadcast_msg = TransformStamped()
         broadcast_msg.header.stamp = rospy.Time.now()
         broadcast_msg.header.frame_id = "map"
         broadcast_msg.child_frame_id = "odom"
-        broadcast_msg.transform.translation.x = self.x_diff
-        broadcast_msg.transform.translation.y = self.y_diff
+        broadcast_msg.transform.translation.x = x_diff
+        broadcast_msg.transform.translation.y = y_diff
         broadcast_msg.transform.translation.z = 0.0
-        broadcast_msg.transform.rotation.x = self.orientation_diff[0]
-        broadcast_msg.transform.rotation.y = self.orientation_diff[1]
-        broadcast_msg.transform.rotation.z = self.orientation_diff[2]
-        broadcast_msg.transform.rotation.w = self.orientation_diff[3]
-        self.br.sendTransform(broadcast_msg)
-
-    def _broadcast_frame_transformation_frequency(self):
-
-        broadcast_msg = TransformStamped()
-        broadcast_msg.header.stamp = rospy.Time.now()
-        broadcast_msg.header.frame_id = "map"
-        broadcast_msg.child_frame_id = "odom"
-        broadcast_msg.transform.translation.x = self.x_diff
-        broadcast_msg.transform.translation.y = self.y_diff
-        broadcast_msg.transform.translation.z = 0.0
-        broadcast_msg.transform.rotation.x = self.orientation_diff[0]
-        broadcast_msg.transform.rotation.y = self.orientation_diff[1]
-        broadcast_msg.transform.rotation.z = self.orientation_diff[2]
-        broadcast_msg.transform.rotation.w = self.orientation_diff[3]
+        broadcast_msg.transform.rotation.x = orientation_diff[0]
+        broadcast_msg.transform.rotation.y = orientation_diff[1]
+        broadcast_msg.transform.rotation.z = orientation_diff[2]
+        broadcast_msg.transform.rotation.w = orientation_diff[3]
         self.br.sendTransform(broadcast_msg)
 
     def _publish(self):
@@ -574,11 +591,13 @@ class MonteCarloLocalization(object):
         self.pub_best_particle.publish(marker_best)
         self.pub_particles.publish(markerArray)
 
+    def _publish_position(self):
         # publish position to global planer
         pose = PoseStamped()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = 'map'
-        x,y,yaw = self.pf.get_position() #pose of best particle
+        # x,y,yaw = self.pf.get_position() #pose of best particle
+        x, y, yaw = self.x_now, self.y_now, self.yaw_now
         pose.pose.position.x, pose.pose.position.y = x,y
         pose.pose.position.z = 0.0
         pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw)
@@ -586,24 +605,42 @@ class MonteCarloLocalization(object):
 
     def run(self):
         rate = rospy.Rate(20) #measurement update with 5Hz
-        i = 0
+        i = j = 0
         while not rospy.is_shutdown():
+
             if self.odometry != None:
-                if i == 0:
+
+                if i == 40:
+
                     if self.last_odometry:
                         self.pf.handle_odometry(self.odometry, self.last_odometry)
                     self.last_odometry = self.odometry
+                    self.last_odometry_sub = self.odometry
                     odometry_for_tf=self.odometry #capture odom_message and scan_message at same timestamp for TF
                     self.pf.handle_observation(self.observation)
                     self._broadcast_frame_transformation(odometry_for_tf)
                     self._publish()
-                    i += 1
+                    self.x_now, self.y_now, self.yaw_now = self.pf.get_position()
+                    self._publish_position()
+                    i = 0
+
                 else:
-                    self._broadcast_frame_transformation_frequency()
-                    if i == 10:
-                        i = 0
-                    else:
-                        i += 1
+
+                    if j == 0:
+                        self.x_now = self.odometry.pose.pose.position.x
+                        self.y_now = self.odometry.pose.pose.position.y
+                        _, _, self.yaw_now = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z, self.odometry.pose.pose.orientation.w])
+                        j += 1
+
+                    if self.last_odometry_sub:
+                        self.pf.handle_odometry_prediction(self.odometry, self.last_odometry_sub)
+                    self.last_odometry_sub = self.odometry
+                    odometry_for_tf=self.odometry
+                    self.x_now, self.y_now, self.yaw_now = self.pf.odom_prediction(self.x_now, self.y_now, self.yaw_now)
+                    self._broadcast_frame_transformation(odometry_for_tf)
+                    self._publish_position()
+                    i += 1
+
             rate.sleep()
 
 if __name__ == '__main__':
