@@ -17,6 +17,7 @@ from timeit import default_timer as timer
 import cProfile, pstats, io
 import os, psutil
 import sys
+import cv2
 
 
 from rto_map_server.srv import GetMap
@@ -415,7 +416,7 @@ class MonteCarloLocalization(object):
         rospy.wait_for_service('get_map')
         try:
             get_map = rospy.ServiceProxy('get_map', GetMap)
-            self.ogm = get_map(1)
+            self.ogm = get_map(2)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
 
@@ -446,6 +447,8 @@ class MonteCarloLocalization(object):
         # Subscribers (LaserScan, Odometry)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1) # 40hz
         self.odom_sub = rospy.Subscriber('/odom', Odometry,  self.odometry_callback, queue_size=1) #20hz
+        self.global_costmap_sub = rospy.Subscriber('/global_costmap', OccupancyGrid, self.global_costmap_callback)
+
 
         # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
         self.pub_particles = rospy.Publisher('/particles', MarkerArray, queue_size=1)
@@ -485,6 +488,14 @@ class MonteCarloLocalization(object):
     def odometry_callback(self, msg): #20hz
 
         self.odometry = msg
+
+    def global_costmap_callback(self, msg):
+        global_costmap = msg.data
+        global_costmap = np.transpose(np.asarray(msg.data, dtype=np.int8).reshape(msg.info.height, msg.info.width))
+        global_costmap[global_costmap!=100]=0
+        self.pf.ogm_map=global_costmap
+        start = timer()
+
 
     def _publish(self):
         """

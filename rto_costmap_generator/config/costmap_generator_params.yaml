@@ -1,5 +1,5 @@
 # Map to start the costmap generator with.
-init_map_nr: 1
+init_map_nr: 2
 
 # Log execution times of critical operations.
 log_times: True
