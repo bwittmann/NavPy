@@ -439,7 +439,7 @@ class ParticleFilter(object):
 class MonteCarloLocalization(object):
 
     #initializes object of MonteCarloLocalization and sets all parameters
-    def __init__(self):
+    def __init__(self, num_particles):
 
         rospy.init_node('monte_carlo_localization')
 
@@ -458,12 +458,11 @@ class MonteCarloLocalization(object):
         self.last_odometry = None
         self.last_odometry_sub = None
         self.observation = None
+        self.eval_beams = 15
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
         dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
-        self.eval_beams = rospy.get_param("~num_beams")
-        num_particles = rospy.get_param("~num_particles")
 
         # instantiate ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0, 0, self.eval_beams,
@@ -606,13 +605,14 @@ class MonteCarloLocalization(object):
 
     def run(self):
         rate = rospy.Rate(20) #measurement update with 5Hz
-        i = j = 0
+        i = 0
+        first_loop = True
         while not rospy.is_shutdown():
 
             if self.odometry != None:
 
+                # determine if it is time to do localization
                 if i == 40:
-
                     if self.last_odometry:
                         self.pf.handle_odometry(self.odometry, self.last_odometry)
                     self.last_odometry = self.odometry
@@ -625,13 +625,13 @@ class MonteCarloLocalization(object):
                     self._publish_position()
                     i = 0
 
+                # if do not do localization, just use odometry to update tf
                 else:
-
-                    if j == 0:
+                    if first_loop:
                         self.x_now = self.odometry.pose.pose.position.x
                         self.y_now = self.odometry.pose.pose.position.y
                         _, _, self.yaw_now = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z, self.odometry.pose.pose.orientation.w])
-                        j += 1
+                        first_loop = False
 
                     if self.last_odometry_sub:
                         self.pf.handle_odometry_prediction(self.odometry, self.last_odometry_sub)
@@ -645,7 +645,8 @@ class MonteCarloLocalization(object):
             rate.sleep()
 
 if __name__ == '__main__':
-    mcl = MonteCarloLocalization()
+    num_particles = 200
+    mcl = MonteCarloLocalization(num_particles)
     mcl.run()
 
 
