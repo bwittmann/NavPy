@@ -439,7 +439,7 @@ class ParticleFilter(object):
 class MonteCarloLocalization(object):
 
     #initializes object of MonteCarloLocalization and sets all parameters
-    def __init__(self, num_particles):
+    def __init__(self):
 
         rospy.init_node('monte_carlo_localization')
 
@@ -458,11 +458,12 @@ class MonteCarloLocalization(object):
         self.last_odometry = None
         self.last_odometry_sub = None
         self.observation = None
-        self.eval_beams = 15
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
         dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
+        self.eval_beams = rospy.get_param("~num_beams")
+        num_particles = rospy.get_param("~num_particles")
 
         # instantiate ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, 0, 0, 0, 0, 0, self.eval_beams,
@@ -644,8 +645,7 @@ class MonteCarloLocalization(object):
             rate.sleep()
 
 if __name__ == '__main__':
-    num_particles = 200
-    mcl = MonteCarloLocalization(num_particles)
+    mcl = MonteCarloLocalization()
     mcl.run()
 
 

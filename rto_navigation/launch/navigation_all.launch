@@ -13,10 +13,8 @@
 
     <!-- Run localization -->
     <node pkg="rto_localization" type="localization_node" output="screen" name="localization_node">
-         <param name="dynamics_translation_noise_std_dev"    value="0.3" />
-         <param name="dynamics_orientation_noise_std_dev"    value="0.1" />
-         <param name="beam_range_measurement_noise_std_dev"  value="0.1" />
-   </node>
+        <rosparam file="$(find rto_localization)/config/localization_node_params.yaml"/>
+    </node>
 
     <!-- Run costmap genertator -->
     <node name="costmap_generator" pkg="rto_costmap_generator" type="costmap_generator_node" output='screen'>
