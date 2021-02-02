@@ -10,7 +10,7 @@ debug_mode: False
 # Parameters necessary for the generation of the global costmap.
 global_costmap: {
   robot_diameter: 0.45,
-  safety_distance: 0.1,
+  safety_distance: 0.0, #0.1
   padded_val: 99,
   apply_soft_padding: True,
   decay_distance: 0.2,
