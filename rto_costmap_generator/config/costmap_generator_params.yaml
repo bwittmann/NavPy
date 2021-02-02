@@ -14,7 +14,7 @@ global_costmap: {
   padded_val: 99,
   apply_soft_padding: True,
   decay_distance: 0.2,
-  decay_type: exponential # linear, exponential, reciprocal
+  decay_type: linear # linear, exponential, reciprocal
 }
 
 # Parameters necessary for the generation of the local costmap.
