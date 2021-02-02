@@ -1,0 +1,5 @@
+dynamics_translation_noise_std_dev: 0.3
+dynamics_orientation_noise_std_dev: 0.01
+num_particles: 200
+num_beams: 15
+update_rate: 10
