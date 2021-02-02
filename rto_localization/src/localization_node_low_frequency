@@ -606,13 +606,14 @@ class MonteCarloLocalization(object):
 
     def run(self):
         rate = rospy.Rate(20) #measurement update with 5Hz
-        i = j = 0
+        i = 0
+        first_loop = True
         while not rospy.is_shutdown():
 
             if self.odometry != None:
 
+                # determine if it is time to do localization
                 if i == 40:
-
                     if self.last_odometry:
                         self.pf.handle_odometry(self.odometry, self.last_odometry)
                     self.last_odometry = self.odometry
@@ -625,13 +626,13 @@ class MonteCarloLocalization(object):
                     self._publish_position()
                     i = 0
 
+                # if do not do localization, just use odometry to update tf
                 else:
-
-                    if j == 0:
+                    if first_loop:
                         self.x_now = self.odometry.pose.pose.position.x
                         self.y_now = self.odometry.pose.pose.position.y
                         _, _, self.yaw_now = transform.euler_from_quaternion([self.odometry.pose.pose.orientation.x, self.odometry.pose.pose.orientation.y, self.odometry.pose.pose.orientation.z, self.odometry.pose.pose.orientation.w])
-                        j += 1
+                        first_loop = False
 
                     if self.last_odometry_sub:
                         self.pf.handle_odometry_prediction(self.odometry, self.last_odometry_sub)

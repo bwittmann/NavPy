@@ -273,11 +273,6 @@ class Bidirectional_Astar_Planner():
                 self.intersect.append(append.position)
         return self.intersect
 
-    def check_no_path(self):
-        """
-        This method is to check if there is a path from current position to goal position
-        """
-
     def search_start(self, minF, offsetX, offsetY):
         """
         search action for next step and add this node to openlist
@@ -290,7 +285,7 @@ class Bidirectional_Astar_Planner():
             return
 
         # if the offset is valid
-        elif self.map[node_pos[0]][node_pos[1]] > 50:
+        elif self.map[node_pos[0]][node_pos[1]] > 98:
             return
 
         # if the node is in closed set, then pass
@@ -335,7 +330,7 @@ class Bidirectional_Astar_Planner():
             return
 
         # if the offset is valid
-        elif self.map[node_pos[0]][node_pos[1]] > 50:
+        elif self.map[node_pos[0]][node_pos[1]] > 98:
             return
 
         # if the node is in closed set, then pass
@@ -521,8 +516,9 @@ class main():
         """
         callback of position
         """
-        # self.pos_x = int((PoseWithCovarianceStamped.pose.pose.position.x - self.origin.x) / self.resolution)
-        # self.pos_y = int((PoseWithCovarianceStamped.pose.pose.position.y - self.origin.y) / self.resolution)
+        # rospy.wait_for_message('global_costmap',OccupancyGrid)
+        # self.pos_x = int((PoseStamped.pose.pose.position.x - self.origin.x) / self.resolution)
+        # self.pos_y = int((PoseStamped.pose.pose.position.y - self.origin.y) / self.resolution)
         self.pos_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
         self.pos_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
         # self.posx = PoseWithCovarianceStamped.pose.pose.position.x
