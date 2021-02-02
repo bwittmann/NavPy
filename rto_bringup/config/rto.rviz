@@ -152,7 +152,7 @@ Visualization Manager:
           Color Scheme: map
           Draw Behind: false
           Enabled: true
-          Name: Costmap_Global
+          Name: CostmapGlobal
           Topic: /global_costmap
           Unreliable: false
           Use Timestamp: false
@@ -162,7 +162,7 @@ Visualization Manager:
           Color Scheme: map
           Draw Behind: false
           Enabled: true
-          Name: Costmap_Local
+          Name: CostmapLocal
           Topic: /local_costmap
           Unreliable: false
           Use Timestamp: false
@@ -380,26 +380,18 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: Sensors_Distance
-    - Class: rviz/Image
+    - Class: rviz/Marker
       Enabled: true
-      Image Topic: /camera/rgb/image_raw
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Image
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: compressed
-      Unreliable: false
-      Value: true
+      Marker Topic: /particle
+      Name: BestParticle
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /visualization/local_path
-      Name: Local_path
+      Name: LocalPath
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /visualization/plan
-      Name: Global_path
+      Name: GlobalPath
       Namespaces:
         {}
       Queue Size: 100
@@ -407,7 +399,7 @@ Visualization Manager:
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /particles
-      Name: MarkerArray
+      Name: ParticleCloud
       Namespaces:
         particles: true
       Queue Size: 100
