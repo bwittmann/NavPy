@@ -423,10 +423,11 @@ class MonteCarloLocalization(object):
         # set variables for prediction and measurement update
         self.odometry = None
         self.last_odometry = None
+        self.odometry_list = np.empty(0)
+        self.odometry_list_time = np.empty(0)
+        self.odom_dict = {"time": [], "odom": []}
+        
         self.observation = None
-        self.x_diff = None
-        self.y_diff = None
-        self.orientation_diff = None
 
         #read in parameters from launch file
         dynamics_translation_noise_std_dev   = rospy.get_param("~dynamics_translation_noise_std_dev")
@@ -443,33 +444,34 @@ class MonteCarloLocalization(object):
         # initialize particles of pf
         self.pf.init_particles()
 
-        #tf brodcaster for x, y, yaw difference between odom and map
+        # initialize broadcaster for TF
         self.br = tf2_ros.TransformBroadcaster()
+        self.x_diff = None
+        self.y_diff = None
+        self.orientation_diff = None
 
-        # Subscribers (LaserScan, Odometry)
+        # Subscribers
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.laser_scan_callback, queue_size=1) # 40hz
-        self.odom_sub = rospy.Subscriber('/odom', Odometry,  self.odometry_callback, queue_size=1) #20hz
+        self.odom_sub = rospy.Subscriber('/odom', Odometry,  self.odometry_callback, queue_size=10) #20hz
         self.global_costmap_sub = rospy.Subscriber('/global_costmap', OccupancyGrid, self.global_costmap_callback)
 
 
-        # Publisher (MarkerArray to RVIZ showing all particles, (x,y,yaw) of most probable position)
+        # Publisher
         self.pub_particles = rospy.Publisher('/particles', MarkerArray, queue_size=1)
         self.pub_best_particle = rospy.Publisher('/particle', Marker, queue_size=1)
-
-        #publish pose of best particle for global planer
         self.pub_pos = rospy.Publisher('/pose', PoseStamped, queue_size=1)
 
     def laser_scan_callback (self, msg):
 
-        # set min and max range, angle of laser
         self.lock.acquire()
-        if self.observation == None:
+
+        if self.observation == None: #first scan message
+            # min, max of laser
             self.pf.laser_min_angle = msg.angle_min
             self.pf.laser_max_angle = msg.angle_max
             self.pf.laser_min_range = msg.range_min
             self.pf.laser_max_range = msg.range_max
-
-            # set of subsampled laserscans
+            # subsampled laserscans
             subsampled_angles = np.linspace(msg.angle_min, msg.angle_max, self.eval_beams)
             self.pf.subsampled_angles = subsampled_angles
 
@@ -479,10 +481,15 @@ class MonteCarloLocalization(object):
     def odometry_callback(self, msg): #20hz
         self.lock.acquire()
         self.odometry = msg
+        self.odometry_list = np.append(self.odometry_list, msg)
+        self.odometry_list_time = np.append(self.odometry_list_time, msg.header.stamp.to_sec())
+        self.odom_dict["time"].append(msg.header.stamp.to_sec())
+        self.odom_dict["odom"].append(msg)
         self.lock.release()
 
     def global_costmap_callback(self, msg):
         self.lock.acquire()
+        # update map with global costmap
         global_costmap = msg.data
         global_costmap = np.transpose(np.asarray(msg.data, dtype=np.int8).reshape(msg.info.height, msg.info.width))
         global_costmap[global_costmap!=100]=0
@@ -504,7 +511,8 @@ class MonteCarloLocalization(object):
         self.orientation_diff = transform.quaternion_multiply(transform.quaternion_inverse(orientation_odometry), orientation_particle)
 
     def _broadcast_frame_transformation(self):
-
+        
+        #broadcast TF
         broadcast_msg = TransformStamped()
         broadcast_msg.header.stamp = rospy.Time.now()
         broadcast_msg.header.frame_id = "map"
@@ -542,6 +550,7 @@ class MonteCarloLocalization(object):
             marker.pose.orientation.x, marker.pose.orientation.y, marker.pose.orientation.z, marker.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw_particle) 
             marker.pose.position.z = 0.0
             markerArray.markers.append(marker)
+        self.pub_particles.publish(markerArray)
 
         # publish the most accurate particle in green
         marker_best = Marker()
@@ -559,9 +568,7 @@ class MonteCarloLocalization(object):
         marker_best.pose.position.x, marker_best.pose.position.y = x,y
         marker_best.pose.position.z = 0.0
         marker_best.pose.orientation.x, marker_best.pose.orientation.y, marker_best.pose.orientation.z, marker_best.pose.orientation.w = transform.quaternion_from_euler(0,0,yaw) 
-
         self.pub_best_particle.publish(marker_best)
-        self.pub_particles.publish(markerArray)
 
         # publish position to global planer
         pose = PoseStamped()
@@ -578,12 +585,31 @@ class MonteCarloLocalization(object):
         i = 0
         while not rospy.is_shutdown():
             if self.odometry != None:
-                if i == 0:
+                if i == 0: #update with update_rate
+
+                    #predict
                     if self.last_odometry:
                         self.pf.handle_odometry(self.odometry, self.last_odometry)
                     self.last_odometry = self.odometry
-                    odometry_for_tf=self.odometry #capture odom_message and scan_message at same timestamp for TF
+
+                    #capture odom_message and scan_message at same timestamp for TF
+                    #odometry_for_tf=self.odometry
+                    timestamp = self.observation.header.stamp.to_sec()
+
+                    # measurement update
                     self.pf.handle_observation(self.observation)
+
+                    self.lock.acquire()
+                    time_diff = (abs(self.odometry_list_time-timestamp)).copy() # get difference between odom messages and scan message used for calculate particles
+                    rospy.loginfo(np.argmin(time_diff))
+                    rospy.loginfo(time_diff)
+                    odometry_for_tf = self.odometry_list[np.argmin(time_diff)] # used odom message with smallest time difference
+                    self.odometry_list_time = np.empty(0).copy()
+                    self.odometry_list = np.empty(0).copy()
+                    self.lock.release()
+                    
+
+                    # publish
                     self._update_frame_transformation(odometry_for_tf)
                     self._broadcast_frame_transformation()
                     self._publish()
