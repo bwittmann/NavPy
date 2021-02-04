@@ -516,7 +516,7 @@ class main():
         """
         callback of position
         """
-        # rospy.wait_for_message('global_costmap',OccupancyGrid)
+        rospy.wait_for_message('global_costmap',OccupancyGrid)
         # self.pos_x = int((PoseStamped.pose.pose.position.x - self.origin.x) / self.resolution)
         # self.pos_y = int((PoseStamped.pose.pose.position.y - self.origin.y) / self.resolution)
         self.pos_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)

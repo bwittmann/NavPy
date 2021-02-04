@@ -180,12 +180,17 @@ class ParticleFilter(object):
         """
 
         weights_not_normalized = np.zeros((self.num_particles))
+        num_right = 0
         
         # calculate weights
         for i in range(self.num_particles):
             self.particles[i].x, self.particles[i].y, self.particles[i].yaw = self._prediction(self.particles[i])
             error = self._update(laser_scan_msg, self.particles[i])
             weights_not_normalized[i] = exp(-error)
+            if error < 3:
+                num_right += 1
+
+        print(num_right)
 
         #commulated relative motion between 2 consecutive prediction set to 0
         self.dx = 0
@@ -198,6 +203,11 @@ class ParticleFilter(object):
 
         #resample
         self._resample()
+
+        if num_right > self.num_particles/2:
+            return True
+        else:
+            return False
 
     def _resample(self): #time = 0.0003
         """
@@ -662,6 +672,7 @@ class MonteCarloLocalization(object):
 
         rate = rospy.Rate(20) #broadcast TF with 20Hz
         i = 0
+        first_iteration = True
         while not rospy.is_shutdown():
             if self.odometry != None:
                 if i == 0: # prediction and update of particles every iteration i = update_rate
@@ -675,7 +686,7 @@ class MonteCarloLocalization(object):
                     timestamp = self.observation.header.stamp.to_sec()
 
                     # measurement update
-                    self.pf.handle_observation(self.observation)
+                    publish = self.pf.handle_observation(self.observation)
 
                     self.lock.acquire()
 
@@ -689,8 +700,13 @@ class MonteCarloLocalization(object):
                     
 
                     # Publish
-                    self._update_frame_transformation(odometry_for_tf)
-                    self._broadcast_frame_transformation()
+                    if first_iteration:
+                        self._update_frame_transformation(odometry_for_tf)
+                        self._broadcast_frame_transformation()
+                        first_iteration = False
+                    elif publish:
+                        self._update_frame_transformation(odometry_for_tf)
+                        self._broadcast_frame_transformation()
                     self._publish()
                     i += 1
 
