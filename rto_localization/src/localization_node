@@ -165,7 +165,7 @@ class ParticleFilter(object):
         for i in range(self.num_particles):
             if type == "init":
                 x, y, yaw = self._get_random_free_space()
-            else:
+            elif type == "random":
                 x, y, yaw = self._find_lost_robot()
             particle = Particle(i, x, y, yaw)
             self.particles[i] = particle
@@ -470,13 +470,14 @@ class MonteCarloLocalization(object):
         num_particles = rospy.get_param("~num_particles")
         self.update_rate = rospy.get_param("~update_rate")
         odom_noise = rospy.get_param("~odom_noise")
+        launch_style = rospy.get_param("~launch_style")
 
         # Init ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, self.eval_beams, dynamics_translation_noise_std_dev, dynamics_orientation_noise_std_dev,
                                 odom_noise)
 
         # Initialize particles of Particle Filter
-        self.pf.init_particles(type="init")
+        self.pf.init_particles(type=launch_style)
 
         # Initialize broadcaster for TF
         self.br = tf2_ros.TransformBroadcaster()
