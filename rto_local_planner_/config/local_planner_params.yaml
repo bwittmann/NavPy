@@ -41,9 +41,9 @@ gain_clearance: 1
 rec_min_lin_vel: 0.012
 rec_min_lin_vel_time: 5 # Unit s
 
-rec_circling_time: 15 #10 prev # Unit s
+rec_circling_time: 20 #10 prev # Unit s
 
-rec_path_time_factor: 0.4 #0.25
+rec_path_time_factor: 0.5 #0.4 #0.25
 rec_path_length: 30 #40
 
 # Distance from goal that is enough to declare goal reached
