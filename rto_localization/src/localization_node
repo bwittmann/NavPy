@@ -190,8 +190,6 @@ class ParticleFilter(object):
             if error < 3:
                 num_right += 1
 
-        print(num_right)
-
         #commulated relative motion between 2 consecutive prediction set to 0
         self.dx = 0
         self.dy = 0
