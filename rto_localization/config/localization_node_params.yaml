@@ -1,6 +1,7 @@
 dynamics_translation_noise_std_dev: 0.3
 dynamics_orientation_noise_std_dev: 0.01
 num_particles: 200
-num_beams: 15
-update_rate: 10
-odom_noise: False
+num_beams: 30
+update_rate: 10 # defines rate of prediction and update --> rate=20Hz/update_rate
+odom_noise: True # True, False
+launch_style: init # init,random (random just works with 400 particles, but with this big number of 				   computational cost in localization is high)
