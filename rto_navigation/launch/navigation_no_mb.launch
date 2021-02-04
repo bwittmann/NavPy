@@ -1,38 +1,25 @@
 <launch>
-
     <arg name="robot_env" default="$(optenv ROBOT_ENV sim_simple)"/>
     <arg name="safety" default="true"/>
     <arg name="map_file" value="$(find rto_map_server)/maps/$(arg robot_env).yaml" />
 
-
-    <!-- Run custom mapserver (in construction) -->
-    <node name="map_server" pkg="rto_map_server" type="map_server_node" output='screen'>
-        <rosparam file="$(find rto_map_server)/config/map_server_params.yaml"/>
-    </node>
+    <!-- Run custom mapserver -->
+    <include file="$(find rto_map_server)/launch/map_server.launch"/>
     
+    <!-- Run costmap generator -->
+    <include file="$(find rto_costmap_generator)/launch/costmap_generator.launch"/>
 
-    <!-- Run mapserver 
-    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
-    -->
-
-
-    <!-- Run AMCL 
-    <include file="$(find amcl)/examples/amcl_omni.launch" />
-    -->
-    
-
-    <!-- Run MoveBase
-    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
-        <rosparam file="$(find rto_navigation)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
-        <rosparam file="$(find rto_navigation)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
-        <rosparam file="$(find rto_navigation)/config/local_costmap_params.yaml" command="load" />
-        <rosparam file="$(find rto_navigation)/config/global_costmap_params.yaml" command="load" />
-        <rosparam file="$(find rto_navigation)/config/base_local_planner_params.yaml" command="load" />
-        <param name="base_local_planner" value="rto_local_planner/RTOLocalPlanner" />
-        <param name="controller_frequency" value="15.0" />
+    <!-- Run localization -->
+    <node name="rto_localization" pkg="rto_localization" type="localization_node_low_frequency" output='screen'>
+        <rosparam file="$(find rto_localization)/config/localization_node_params.yaml"/>
     </node>
-    -->
 
+    <!-- Run local planner -->
+    <include file="$(find rto_local_planner_)/launch/local_planner.launch"/>
+
+    <!-- Run global_planner -->
+    <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
+    
     <!-- Run rto_safety_node -->
     <group if="$(arg safety)">
         <include file="$(find rto_safety)/launch/rto_safety_node.launch"/>    
