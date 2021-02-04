@@ -13,7 +13,7 @@ global_costmap: {
   safety_distance: 0.0, #0.1
   padded_val: 99,
   apply_soft_padding: True,
-  decay_distance: 0.2,
+  decay_distance: 0.4,
   decay_type: linear # linear, exponential, reciprocal
 }
 

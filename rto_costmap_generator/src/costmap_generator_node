@@ -147,6 +147,7 @@ class CostmapGenerator():
         # Init subscribers
         rospy.Subscriber('/scan', LaserScan, self._cb_scan)
         rospy.Subscriber('/odom', Odometry, self._cb_current_pose)
+        #rospy.Subscriber('/pose', PoseStamped, self._cb_current_pose)
 
         # Prepare local_costmap for publishing
         self.local_costmap = OccupancyGrid()
@@ -254,10 +255,15 @@ class CostmapGenerator():
             
             # Add local obstacles to the global costmap and pad them.
             for point in self.local_obstacles.points:
-                x = (point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution
-                y = (point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution
-                self._pad_point(global_costmap, (y, x))
-                global_costmap[int(y), int(x)] = 100
+                # x = int((point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution) -1 
+                # y = int((point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution) - 1
+                x = int(np.floor((point.x - self.static_map.info.origin.position.x)/self.static_map.info.resolution))
+                y = int(np.floor((point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution))
+                try:
+                    self._pad_point(global_costmap, (y, x))
+                    global_costmap[y, x] = 101
+                except IndexError:
+                    pass
 
             self.static_map.data = global_costmap.ravel()
             self.static_map.header.stamp = rospy.Time.now()
@@ -436,8 +442,10 @@ class CostmapGenerator():
 
             # Add points of the local costmap that have been transformed for visualization purposes
             for point in pointcloud_local_costmap.points:
-                point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
-                    int(np.round(point.y / self.local_costmap.info.resolution, 0)))
+                point = (int(np.floor(point.x / self.local_costmap.info.resolution)), \
+                     int(np.floor(point.y / self.local_costmap.info.resolution)))
+                # point = (int(np.round(point.x / self.local_costmap.info.resolution, 0)), \
+                #     int(np.round(point.y / self.local_costmap.info.resolution, 0)))
                 try:
                     local_costmap[robot_pos[0] + point[0], robot_pos[1] + point[1]] = 100
                 except:
