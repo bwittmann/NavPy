@@ -261,7 +261,7 @@ class CostmapGenerator():
                 y = int(np.floor((point.y - self.static_map.info.origin.position.y)/self.static_map.info.resolution))
                 try:
                     self._pad_point(global_costmap, (y, x))
-                    global_costmap[y, x] = 101
+                    global_costmap[y, x] = 100
                 except IndexError:
                     pass
 
