@@ -1,3 +1,12 @@
+# Structure (according to https://github.com/SteveMacenski/slam_toolbox)
+
+- Introduction + gif of running version
+- Overview /Structure (see https://github.com/dietriro/rto_core) + rqtgraph
+- Packages with subscribed topics, published topics, services, config (params)
+- How to run / Usage (roslaunch rto_nav..)
+- Install (clone, catkin build, etc.)
+
+
 # Trash_Picking_Robot
 
 TODO: please enter your created packages below
