@@ -1,4 +1,4 @@
-# Structure (according to https://github.com/SteveMacenski/slam_toolbox)
+# TODO: Structure
 
 - Introduction + gif of running version
 - Overview /Structure (see https://github.com/dietriro/rto_core) + rqtgraph
