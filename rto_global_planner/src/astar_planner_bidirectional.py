@@ -7,7 +7,7 @@ import tf
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist, Point, Quaternion, Pose, PoseStamped, PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import OccupancyGrid, MapMetaData, Path
+from nav_msgs.msg import OccupancyGrid, MapMetaData, Path, Odometry
 from visualization_msgs.msg import Marker
 from rto_costmap_generator.srv import SwitchMaps, ClearMap
 
@@ -16,15 +16,16 @@ from rto_costmap_generator.srv import SwitchMaps, ClearMap
 
 class Node_end():
     """
-    A node class for A* Pathfinding
-    @parameter parent: parent node
-    @parameter position: position on map
-    @parameter g: cost from start position to current position
-    @parameter h: heuristic cost from current position to goal
-    @parameter f: sum of g and h
+    A node class for A* Pathfinding, stores nodes for searching from end point
+        @parameter parent: parent node
+        @parameter position: position on map
+        @parameter g: cost from start position to current position
+        @parameter h: heuristic cost from current position to goal
+        @parameter f: sum of g and h
     """
 
     def __init__(self, parent=None, position=None):
+
         self.parent = parent
         self.position = position
 
@@ -33,19 +34,21 @@ class Node_end():
         self.f = 0
 
     def __eq__(self, other):
+
         return self.position == other.position
 
 class Node_start():
     """
-    A node class for A* Pathfinding
-    @parameter parent: parent node
-    @parameter position: position on map
-    @parameter g: cost from start position to current position
-    @parameter h: heuristic cost from current position to goal
-    @parameter f: sum of g and h
+    A node class for A* Pathfinding, stores nodes for searching from start point
+        @parameter parent: parent node
+        @parameter position: position on map
+        @parameter g: cost from start position to current position
+        @parameter h: heuristic cost from current position to goal
+        @parameter f: sum of g and h
     """
 
     def __init__(self, parent=None, position=None):
+
         self.parent = parent
         self.position = position
 
@@ -54,6 +57,7 @@ class Node_start():
         self.f = 0
 
     def __eq__(self, other):
+
         return self.position == other.position
 
 class Bidirectional_Astar_Planner():
@@ -63,9 +67,8 @@ class Bidirectional_Astar_Planner():
     def check_obstacle(self, start, end):
         """
         This function is used to check if there is an obstacle between start point and end point
-
-        @return True: if there is an obstacle between start and end
-        @return False: if there is no obstacle between start and end
+            @return True: if there is an obstacle between start and end
+            @return False: if there is no obstacle between start and end
         """
 
         # get the difference between start and end in x,y axis
@@ -472,7 +475,8 @@ class main():
         rospy.wait_for_message('/global_costmap', OccupancyGrid)
         # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
         self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
-        self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
+        # self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
+        self.sub_pos = rospy.Subscriber('/odom', Odometry, self.callback_pos)
         # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
@@ -480,6 +484,9 @@ class main():
         self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
         self.pub_plan = rospy.Publisher('/visualization/plan', Marker, queue_size=10)
         # self.pub_cmd = rospy.Publisher('/cmd_vel',Twist, queue_size=10)
+
+        # Init tf listener
+        self.listener = tf.TransformListener()
 
         # Initialize messages
         self.msg_path = Path()
@@ -499,6 +506,13 @@ class main():
         self.msg_path_marker.color.b = 1.0
         self.msg_path_marker.pose.orientation = Quaternion(0, 0, 0, 1)
 
+        # Setup PoseStamped for transformation of points from frame /odom to /map
+        self.pose = PoseStamped()
+        self.pose.header.frame_id= '/odom'
+
+        # if pos got
+        self.get_pos = False
+
     def callback_costmap(self, OccupancyGrid):
         """
         callback of costmap
@@ -512,18 +526,24 @@ class main():
         self.resolution = OccupancyGrid.info.resolution
 
     # Wait for amcl part to provide it with initial position
-    def callback_pos(self, PoseStamped):
+    def callback_pos(self, msg):
         """
         callback of position
         """
         rospy.wait_for_message('global_costmap',OccupancyGrid)
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
+
+        # Transform robot pose to from /odom to /map frame
+        self.pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
+        self.pose.pose.position = msg.pose.pose.position
+        self.pose.pose.orientation = msg.pose.pose.orientation
+        position = self.listener.transformPose('/map', self.pose)
         # self.pos_x = int((PoseStamped.pose.pose.position.x - self.origin.x) / self.resolution)
         # self.pos_y = int((PoseStamped.pose.pose.position.y - self.origin.y) / self.resolution)
-        self.pos_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
-        self.pos_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
-        # self.posx = PoseWithCovarianceStamped.pose.pose.position.x
-        # self.posy = PoseWithCovarianceStamped.pose.pose.position.y
-        # print(self.posx, self.posy)
+        self.pos_x = int((position.pose.position.x - self.origin.x) / self.resolution)
+        self.pos_y = int((position.pose.position.y - self.origin.y) / self.resolution)
+
+        self.get_pos = True
 
     def callback_goal(self, PoseStamped):
         """
@@ -561,46 +581,47 @@ class main():
             #TODO:replace initial position using amcl
             # self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
             # self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
-            start = (self.pos_x, self.pos_y)
-            # print('start is ',self.posx, self.posy)
+            if self.get_pos:
+                start = (self.pos_x, self.pos_y)
+                # print('start is ',self.posx, self.posy)
 
-            if self.check_valid(self.goal_x, self.goal_y):
+                if self.check_valid(self.goal_x, self.goal_y):
 
-                end = (int(self.goal_x), int(self.goal_y))
-                path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
+                    end = (int(self.goal_x), int(self.goal_y))
+                    path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
-                # check if there is a path
-                if not path:
-                    rospy.wait_for_service('clear_map')
-                    try:
-                        clear_client = rospy.ServiceProxy('clear_map', ClearMap)
-                        clear_client.call("clear")
-                        # rospy.loginfo('No path find, global costmap is initialized, please try agian')
-                    except rospy.ServiceException:
-                        # rospy.loginfo('No path between start and goal')
-                        rospy.loginfo('No path find, global costmap is initialized, try agian')
-                        start = (self.pos_x, self.pos_y)
-                        path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
+                    # check if there is a path
+                    if not path:
+                        rospy.wait_for_service('clear_map')
+                        try:
+                            clear_client = rospy.ServiceProxy('clear_map', ClearMap)
+                            clear_client.call("clear")
+                            # rospy.loginfo('No path find, global costmap is initialized, please try agian')
+                        except rospy.ServiceException:
+                            # rospy.loginfo('No path between start and goal')
+                            rospy.loginfo('No path find, global costmap is initialized, try agian')
+                            start = (self.pos_x, self.pos_y)
+                            path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
-                # publish path
-                # else:
-                if path:
-                    for pa in path:
-                        pose = PoseStamped()
-                        pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
-                        pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
-                        self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
-                        self.msg_path.poses.append(pose)
-                    self.pub_plan.publish(self.msg_path_marker)
-                    self.pub_path.publish(self.msg_path)
-                    self.msg_path.poses.clear()
-                    self.msg_path_marker.points.clear()
-                    rospy.loginfo('Path is published')
+                    # publish path
+                    # else:
+                    if path:
+                        for pa in path:
+                            pose = PoseStamped()
+                            pose.pose.position.x = (pa[0] + 0.5) * self.resolution + self.origin.x
+                            pose.pose.position.y = (pa[1] + 0.5) * self.resolution + self.origin.y
+                            self.msg_path_marker.points.append(Point(pose.pose.position.x, pose.pose.position.y, 0))
+                            self.msg_path.poses.append(pose)
+                        self.pub_plan.publish(self.msg_path_marker)
+                        self.pub_path.publish(self.msg_path)
+                        self.msg_path.poses.clear()
+                        self.msg_path_marker.points.clear()
+                        rospy.loginfo('Path is published')
+                    else:
+                        rospy.loginfo('There is no path between start and goal, please set another goal')
+
                 else:
-                    rospy.loginfo('There is no path between start and goal, please set another goal')
-
-            else:
-                rospy.loginfo('Goal is not valid')
+                    rospy.loginfo('Goal is not valid')
 
 
 
