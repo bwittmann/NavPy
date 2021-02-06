@@ -11,12 +11,10 @@ from nav_msgs.msg import OccupancyGrid, MapMetaData, Path, Odometry
 from visualization_msgs.msg import Marker
 from rto_costmap_generator.srv import SwitchMaps, ClearMap
 
-#TODO:add threading
-#TODO:use initial position from amcl node
-
 class Node_end():
     """
     A node class for A* Pathfinding, stores nodes for searching from end point
+
         @parameter parent: parent node
         @parameter position: position on map
         @parameter g: cost from start position to current position
@@ -40,6 +38,7 @@ class Node_end():
 class Node_start():
     """
     A node class for A* Pathfinding, stores nodes for searching from start point
+
         @parameter parent: parent node
         @parameter position: position on map
         @parameter g: cost from start position to current position
@@ -62,11 +61,15 @@ class Node_start():
 
 class Bidirectional_Astar_Planner():
     """
-    Independent Astar_Planner function class
+    Independent Astar_Planner function class, which can find a path from start point to end point
     """
     def check_obstacle(self, start, end):
         """
         This function is used to check if there is an obstacle between start point and end point
+
+            @parameter start: position of start point
+            @parameter end: position of end point
+
             @return True: if there is an obstacle between start and end
             @return False: if there is no obstacle between start and end
         """
@@ -121,7 +124,9 @@ class Bidirectional_Astar_Planner():
         """
         This function is used to delete non-neccessary point in path
 
-        @return: path with only key point
+            @parameter path: path represented by points
+
+            @return: path with only key point
         """
         # set new path begin at path[0]
         new_path = [path[0]]
@@ -140,7 +145,11 @@ class Bidirectional_Astar_Planner():
 
     def Path_smoothing(self, path):
         """
-        This is a function to smooth path. To make a path looks more realistic.
+        This is a function using floyed method to smooth path. To make a path looks more realistic.
+
+            @parameter path: path represented by points
+
+            @return path: smoothed path
         """
         # First merge nodes that the direction do not change, keep key nodes only
         path = self.get_key_point(path)
@@ -167,7 +176,11 @@ class Bidirectional_Astar_Planner():
 
     def Path_argument(self, path):
         """
-        This is a function to make path consists of only key points to dense path
+        This is a function to argument path which consists of only key points to dense path
+
+            @patameter path: path represented by points
+
+            @return path: dense path consists of continuous points
         """
         # set a new path
         new_path = []
@@ -224,8 +237,12 @@ class Bidirectional_Astar_Planner():
     def check_direction(self, node_child, node_parent):
         """
         check the direction of next step
-        if the direction does not change, return 0
-        if the direction changes, return 1
+
+            @parameter node_child: current node
+            @parameter node_parent: previous node
+
+            @return 0: if the direction does not change(the same as previous step)
+            @return 1: if the direction changes(differ from previous step)
         """
         node_grand = node_parent.parent
         if not node_grand:
@@ -240,7 +257,9 @@ class Bidirectional_Astar_Planner():
         """
         try to find the node with minimal f in openlist
 
-        @return: the node with minimal f value
+            @parameter input_list: node list
+
+            @return currentNode: the node with minimal f value
         """
         currentNode = input_list[0]
         for node in input_list:
@@ -251,6 +270,12 @@ class Bidirectional_Astar_Planner():
     def pointInCloseList(self, position, closed_list):
         """
         determine if a position is in closelist
+
+            @parameter position: the position of points you want check
+            @parameter closed_list: closed_list of points
+
+            @return True: if the position is in closelist
+            @return False: if the position is not in closelist
         """
         for node in closed_list:
             if node.position == position:
@@ -260,6 +285,12 @@ class Bidirectional_Astar_Planner():
     def pointInOpenList(self, position, open_list):
         """
         determine if a position is in openlist
+
+            @parameter position: the position of points you want check
+            @parameter open_list: open_list of points
+
+            @return True: if the position is in openlist
+            @return False: if the position is not in openlist
         """
         for node in open_list:
             if node.position == position:
@@ -269,6 +300,11 @@ class Bidirectional_Astar_Planner():
     def check_intersection(self, open_start, open_end):
         """
         find intersection part of two openlist
+
+            @parameter open_start: openlist from the start point
+            @parameter open_end: openlist from the end point
+
+            @return: the intersection part of two nodelist
         """
         for node in open_start:
             append = self.pointInOpenList(node.position, open_end)
@@ -279,6 +315,12 @@ class Bidirectional_Astar_Planner():
     def search_start(self, minF, offsetX, offsetY):
         """
         search action for next step and add this node to openlist
+
+            @parameter minF: currentNode with minimal f value in openlist
+            @parameter offsetX: the offset in x direction
+            @parameter offsetY: the offset in y direction
+
+            @return: add the node for next step to openlist
         """
 
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
@@ -324,6 +366,12 @@ class Bidirectional_Astar_Planner():
     def search_end(self, minF, offsetX, offsetY):
         """
         search action for next step and add this node to openlist
+
+            @parameter minF: currentNode with minimal f value in openlist
+            @parameter offsetX: the offset in x direction
+            @parameter offsetY: the offset in y direction
+
+            @return: add the node for next step to openlist
         """
 
         node_pos = (minF.position[0] + offsetX, minF.position[1] + offsetY)
@@ -370,7 +418,13 @@ class Bidirectional_Astar_Planner():
         """
         main function of astar search
 
-        @return: a global path
+            @parameter gridmap: the input map
+            @parameter map_width: the width of input map
+            @parameter map_height: the height of input map
+            @parameter start: start point's position
+            @parameter end: end point's position
+
+            @return: a global path
         """
 
         # Initialize endnode and startnode
@@ -470,20 +524,26 @@ class main():
     """
 
     def __init__(self):
+        '''
+        initialize of main function
+
+            @subscriber sub_map: subscribe to global costmap
+            @subscriber sub_pos: subscribe to odometry
+            @subscriber sub_goal: subscribe to goal
+
+            @publisher pub_path: publish path
+            @publisher pub_plan: publish plan for visualization in rviz
+        '''
 
         # Initialize Subscribers
-        rospy.wait_for_message('/global_costmap', OccupancyGrid)
-        # self.sub_map = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.callback_costmap)
         self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
         # self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
         self.sub_pos = rospy.Subscriber('/odom', Odometry, self.callback_pos)
-        # self.sub_pos = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.callback_pos)
         self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
         self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
         self.pub_plan = rospy.Publisher('/visualization/plan', Marker, queue_size=10)
-        # self.pub_cmd = rospy.Publisher('/cmd_vel',Twist, queue_size=10)
 
         # Init tf listener
         self.listener = tf.TransformListener()
@@ -516,6 +576,12 @@ class main():
     def callback_costmap(self, OccupancyGrid):
         """
         callback of costmap
+
+            @parameter map: map input
+            @parameter map_width: map's width
+            @parameter map_height: map's height
+            @parameter origin: map's origin point
+            @parameter resolution: map's resolution
         """
         self.map_input = np.array(OccupancyGrid.data)
         self.map_width = OccupancyGrid.info.width
@@ -525,39 +591,53 @@ class main():
         self.origin = OccupancyGrid.info.origin.position
         self.resolution = OccupancyGrid.info.resolution
 
-    # Wait for amcl part to provide it with initial position
+    # Wait for localization part to provide it with initial position
     def callback_pos(self, msg):
         """
         callback of position
+
+            @parameter pos_x: x position of current position in map
+            @parameter pos_y: y position of current position in map
+            @parameter get_pos: once position callback is excuted, set it to True
         """
+
+        # Wait for global_costmap to plan a path
         rospy.wait_for_message('global_costmap',OccupancyGrid)
-        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
 
         # Transform robot pose to from /odom to /map frame
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
         self.pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
         self.pose.pose.position = msg.pose.pose.position
         self.pose.pose.orientation = msg.pose.pose.orientation
         position = self.listener.transformPose('/map', self.pose)
-        # self.pos_x = int((PoseStamped.pose.pose.position.x - self.origin.x) / self.resolution)
-        # self.pos_y = int((PoseStamped.pose.pose.position.y - self.origin.y) / self.resolution)
+
+        # Transform current position into map position
         self.pos_x = int((position.pose.position.x - self.origin.x) / self.resolution)
         self.pos_y = int((position.pose.position.y - self.origin.y) / self.resolution)
 
+        # Set it to True to enable using of current map position
         self.get_pos = True
 
     def callback_goal(self, PoseStamped):
         """
         callback of goal
+
+            @parameter goal_x: x position of current position in map
+            @parameter goal_y: y position of current position in map
         """
-        # shift position to position in map
+        # Transform position to position in map
         self.goal_x = int((PoseStamped.pose.position.x - self.origin.x) / self.resolution)
         self.goal_y = int((PoseStamped.pose.position.y - self.origin.y) / self.resolution)
-        # print(PoseStamped.pose.position.x, PoseStamped.pose.position.y)
-        # print('goal is ',self.goal_x, self.goal_y)
 
     def check_valid(self, goalx, goaly):
         """
         check the validility of goal
+
+            @parameter goalx: x position of goal in map
+            @parameter goaly: y position of goal in map
+
+            @return True: if the goal is valid
+            @return None: if the goal is not valid
         """
         if goalx > self.map_width - 1 or goalx < 0 or goaly > self.map_height - 1 or goaly < 0:
             # rospy.logwarn('Goal is out of boundary')
@@ -578,13 +658,10 @@ class main():
             global_planner = Bidirectional_Astar_Planner()
 
             # initialize start node
-            #TODO:replace initial position using amcl
-            # self.pos_x = int((0.09035 - self.origin.x) / self.resolution)
-            # self.pos_y = int((0.01150 - self.origin.y) / self.resolution)
             if self.get_pos:
                 start = (self.pos_x, self.pos_y)
-                # print('start is ',self.posx, self.posy)
 
+                # check if goal is valid
                 if self.check_valid(self.goal_x, self.goal_y):
 
                     end = (int(self.goal_x), int(self.goal_y))
@@ -596,15 +673,14 @@ class main():
                         try:
                             clear_client = rospy.ServiceProxy('clear_map', ClearMap)
                             clear_client.call("clear")
-                            # rospy.loginfo('No path find, global costmap is initialized, please try agian')
                         except rospy.ServiceException:
-                            # rospy.loginfo('No path between start and goal')
                             rospy.loginfo('No path find, global costmap is initialized, try agian')
+
+                            # apply searching again since global costmap is cleared
                             start = (self.pos_x, self.pos_y)
                             path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
 
                     # publish path
-                    # else:
                     if path:
                         for pa in path:
                             pose = PoseStamped()
