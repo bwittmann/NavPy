@@ -674,7 +674,7 @@ class main():
                             clear_client = rospy.ServiceProxy('clear_map', ClearMap)
                             clear_client.call("clear")
                         except rospy.ServiceException:
-                            rospy.loginfo('Global planner: No path found, global costmap is initialized, try again')
+                            rospy.loginfo('Global planner: No path found, global costmap is initialized, try again.')
 
                             # apply searching again since global costmap is cleared
                             start = (self.pos_x, self.pos_y)
@@ -692,12 +692,12 @@ class main():
                         self.pub_path.publish(self.msg_path)
                         self.msg_path.poses.clear()
                         self.msg_path_marker.points.clear()
-                        rospy.loginfo('Global planner: Path is published')
+                        rospy.loginfo('Global planner: Path is published.')
                     else:
-                        rospy.loginfo('Global planner: There is no path between start and goal, please set another goal')
+                        rospy.loginfo('Global planner: There is no path between start and goal, please set another goal.')
 
                 else:
-                    rospy.loginfo('Global planner: Goal is not valid')
+                    rospy.loginfo('Global planner: Goal is not valid.')
 
 
 
