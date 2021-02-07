@@ -10,9 +10,7 @@
     <include file="$(find rto_costmap_generator)/launch/costmap_generator.launch"/>
 
     <!-- Run localization -->
-    <node name="rto_localization" pkg="rto_localization" type="localization_node" output='screen'>
-        <rosparam file="$(find rto_localization)/config/localization_node_params.yaml"/>
-    </node>
+    <include file="$(find rto_localization)/launch/localization.launch"/>
 
     <!-- Run local planner -->
     <include file="$(find rto_local_planner)/launch/local_planner.launch"/>

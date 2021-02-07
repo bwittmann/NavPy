@@ -31,7 +31,9 @@ class Particle(object):
         self.yaw = yaw
 
 class ParticleFilter(object):
-    def __init__(self, num_particles, occ_grid_map, eval_beams, dynamics_translation_noise_std_dev, dynamics_orientation_noise_std_dev, odom_noise):
+    def __init__(self, num_particles, occ_grid_map, eval_beams, dynamics_translation_noise_std_dev, 
+                dynamics_orientation_noise_std_dev, odom_noise, localization_error, 
+                localization_error_percentage):
         """
         INIT of ParticleFilter class
 
@@ -41,12 +43,19 @@ class ParticleFilter(object):
         @params dynamics_translation_noise_std_dev: Variance used for the prediction of the particles in x, y
         @params dynamics_orientation_noise_std_dev: Variance used for the prediction of the particles yaw
         @params odom_noise: Bool value which defines whether noise should be incorperated in odometry
+        @params localization_error: If error of particle is samller than localization_error the particle is labeled as "good"
+        @params localization_error_percentage: This percentage defindes whether localization or odometry is used to localize the robot.
+        If more than localization_error_percentage particles are "good" labeled particles localization is used.
+
         """
 
         #Particle Filter variables
         self.num_particles = num_particles
         self.eval_beams = eval_beams
         self.odom_noise = odom_noise
+        self.localization_error = localization_error
+        self.localization_error_percentage = localization_error_percentage
+
         self.particles = np.empty(self.num_particles, dtype=Particle)
         self.weights = np.array([1/self.num_particles]*self.num_particles)
 
@@ -187,7 +196,7 @@ class ParticleFilter(object):
             self.particles[i].x, self.particles[i].y, self.particles[i].yaw = self._prediction(self.particles[i])
             error = self._update(laser_scan_msg, self.particles[i])
             weights_not_normalized[i] = exp(-error)
-            if error < 3:
+            if error < self.localization_error:
                 num_right += 1
 
         #commulated relative motion between 2 consecutive prediction set to 0
@@ -202,9 +211,11 @@ class ParticleFilter(object):
         #resample
         self._resample()
 
-        if num_right > self.num_particles/2:
+        if num_right > self.num_particles*self.localization_error_percentage:
+            rospy.loginfo("LOCAL")
             return True
         else:
+            rospy.loginfo("ODOM")
             return False
 
     def _resample(self): #time = 0.0003
@@ -479,10 +490,12 @@ class MonteCarloLocalization(object):
         self.update_rate = rospy.get_param("~update_rate")
         odom_noise = rospy.get_param("~odom_noise")
         launch_style = rospy.get_param("~launch_style")
+        localization_error = rospy.get_param("~localization_error")
+        localization_error_percentage = rospy.get_param("~localization_error_percentage")
 
         # Init ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, self.eval_beams, dynamics_translation_noise_std_dev, dynamics_orientation_noise_std_dev,
-                                odom_noise)
+                                odom_noise, localization_error, localization_error_percentage)
 
         # Initialize particles of Particle Filter
         self.pf.init_particles(type=launch_style)

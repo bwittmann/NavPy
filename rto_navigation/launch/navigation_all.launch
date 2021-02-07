@@ -12,9 +12,7 @@
     </node>
 
     <!-- Run localization -->
-    <node pkg="rto_localization" type="localization_node" output="screen" name="localization_node">
-        <rosparam file="$(find rto_localization)/config/localization_node_params.yaml"/>
-    </node>
+    <include file="$(find rto_localization)/launch/localization.launch"/>
 
     <!-- Run costmap genertator -->
     <node name="costmap_generator" pkg="rto_costmap_generator" type="costmap_generator_node" output='screen'>
@@ -26,7 +24,7 @@
     <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
 
     <!-- Run local planner -->
-    <node name="local_planner" pkg="rto_local_planner_" type="local_planner_node" output='screen'>
-        <rosparam file="$(find rto_local_planner_)/config/local_planner_params.yaml"/>
+    <node name="local_planner" pkg="rto_local_planner" type="local_planner_node" output='screen'>
+        <rosparam file="$(find rto_local_planner)/config/local_planner_params.yaml"/>
     </node>
 </launch>
