@@ -40,12 +40,12 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognised by the system, the accuracy of the loclization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laserscan range measurements. The figure bellow depicts the local costmap and a obstacle that is currently not part of the global costmap. 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 40%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed;">
   <tr>
-    <td style="width: 20;"> <img src="resources/images/local_costmap.png"></td>
+    <td style="width: 300px;"> <img src="resources/images/local_costmap.png"></td>
   </tr>
   <tr>
-    <td style="width: 20%;" valign="top"> <b>Fig.x:</b> Local costmap (green).
+    <td style="width: 300px;" valign="top"> <b>Fig.x:</b> Local costmap (green).
   </tr>
 </table>
 
@@ -95,6 +95,22 @@ response: success [bool]
 
 
 ### rto_map_server
+#### Description
+This package contains the rto_map_server node, which transforms a pgm file to a OccupancyGrid message and is able to store and switch between multiple maps. The map server also adds meta information that is stored in the corresponding yaml file to the the OccupancyGrid message. The pgm and yaml files should be stored in the maps folder. To create the corresponding files for a new map existing packages like the 'slam_toolbox' and the ROS navigation stack 'map_saver' can be utilized. The information of the yaml file should be added in the form of a dictionary to the rto_map_server config file.
+
+#### Subscribed Topics
+none
+#### Published Topics
+##### `/map`
+To publish the OccupancyGrid that has been constructed based on a pgm and yaml file.
+#### Services
+##### `/get_map`
+Service that adds elements from the local_obstacle point cloud to the global costmap.<br>
+request: map_nr [int64]<br>
+response: map [nav_msgs/OccupancyGrid]
+
+
+
 
 ### rto_local_planner
 
