@@ -50,11 +50,53 @@ In a real world scenario it is not enough to make decisions based on a static gl
 </table>
 
 #### Subscribed Topics
-/scan
-#### Published Topics
-#### Services
-#### Configuration
+##### `/scan`
+To receive the LaserScan messages from the hokuyo laser scanner.
+##### `/odom`
+To receive the Odometry messages from the odometry system.
 
+#### Published Topics
+##### `/global_costmap`
+To publish the OccupancyGrid of the padded global costmap.
+##### `/local_costmap`
+To publish the Occupancy Grid of the local costmap for visualization purpose.
+##### `/local_obstacles`
+To publish the PointCloud of sensed obstacles that has been transformed to the map frame.
+
+#### Services
+##### `/switch_maps`
+Service that switches the static map that gets used by the costmap generator to generate the global costmap.<br>
+request: map_nr_switch [int8] <br>
+response: success [bool]
+##### `/clear_map`
+Service that resets the global costmap to its original state that only represents the padded static map. All additionally added obstacles will be deleted.<br>
+request: command [string] ('clear')<br>
+response: success [bool]
+##### `/add_local_map`
+Service that adds elements from the local_obstacle point cloud to the global costmap.<br>
+request: command [string] ('stuck')<br>
+response: success [bool]
+
+#### Configuration
+`init_map_nr`: Map to start the costmap generator with.<br>
+`log_times`: Log execution times of critical operations.<br>
+`debug_mode`: Return debugging messages to the terminal.<br>
+`global_costmap`: 
+- `robot_diameter`: The diameter of the robot used for 'hard padding'.
+- `safety_distance`: Additional distance used for 'hard padding'.
+- `padded_val`: Value of the grid elements that are part of the 'hard padding' area.
+- `apply_soft_padding`: Apply the area of 'soft padding' to the global costmap.
+- `decay_distane`: Distance from the area of 'hard padding' that is affected by 'soft padding'.
+- `decay_type`: Decay type of the area of 'soft padding' (linear, exponential, reciprocal).
+`local_costmap`:
+- `length`: Width and height of the local costmap.
+- `frequency`: Frequency of updating the local costmap.
+- `frequency_scan`: Frequency at which the laser scanner operates.
+
+
+### rto_map_server
+
+### rto_local_planner
 
 All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
 
