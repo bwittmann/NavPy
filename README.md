@@ -110,8 +110,6 @@ request: map_nr [int64]<br>
 response: map [nav_msgs/OccupancyGrid]
 
 
-
-
 ### rto_local_planner
 
 All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
