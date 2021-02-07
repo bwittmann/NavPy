@@ -50,6 +50,7 @@ In a real world scenario it is not enough to make decisions based on a static gl
 </table>
 
 #### Subscribed Topics
+/scan
 #### Published Topics
 #### Services
 #### Configuration
