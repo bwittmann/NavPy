@@ -54,7 +54,6 @@ In a real world scenario it is not enough to make decisions based on a static gl
 To receive the LaserScan messages from the hokuyo laser scanner.
 ##### `/odom`
 To receive the Odometry messages from the odometry system.
-
 #### Published Topics
 ##### `/global_costmap`
 To publish the OccupancyGrid of the padded global costmap.
@@ -62,7 +61,6 @@ To publish the OccupancyGrid of the padded global costmap.
 To publish the Occupancy Grid of the local costmap for visualization purpose.
 ##### `/local_obstacles`
 To publish the PointCloud of sensed obstacles that has been transformed to the map frame.
-
 #### Services
 ##### `/switch_maps`
 Service that switches the static map that gets used by the costmap generator to generate the global costmap.<br>
@@ -76,7 +74,6 @@ response: success [bool]
 Service that adds elements from the local_obstacle point cloud to the global costmap.<br>
 request: command [string] ('stuck')<br>
 response: success [bool]
-
 #### Configuration
 `init_map_nr`: Map to start the costmap generator with.<br>
 `log_times`: Log execution times of critical operations.<br>
@@ -109,31 +106,74 @@ To publish the OccupancyGrid that has been constructed based on a pgm and yaml f
 Service that adds elements from the local_obstacle point cloud to the global costmap.<br>
 request: map_nr [int64]<br>
 response: map [nav_msgs/OccupancyGrid]
+#### Configuration
+`debug_mode`: Return debugging messages to the terminal.<br>
+`maps_nr`: The number of maps being stored on the map server.<br>
+`mapx`:
+- `image`: Name of the pgm image stored in the maps folder
+- `resolution`: Resolution of the pixels in meter.
+- `origin`: List consiting of the x, y and z coordinate of the maps origin.
+- `occupied_thresh`: Threshold of the grid value for being seen as occupied.
+- `free_thresh`: Threshold of the grid value for being seen as free.
 
 
 ### rto_local_planner
+#### Description
+This package contains the local_planner_node, which creates a local path and allows the robot to follow the global path to reach the navigation goal.
+
+The local planner implemented in this package is based on the dynamic window approach, which is an online collision avoidance strategy that samples trajectories from a generated valid search space and selects the best trajectory for the current situation with the help of a cost function. The cost function consists of four different seperate costs and is minimized in order to obtain the optimal control values. The four parts of the cost function are:
+
+- cost based on linear velocity
+- cost based on the angle towards the goal
+- cost based on the proximity to the global path 
+- cost based on the proximity to obstacles
+
+The overall cost for a control pair is 0 if the robot travels with its maximal linear velocity, looks directly towards the goal, is exactely on the global path and the range to the closest obstacle is as big as possible. Based on the gain factors of the different costs the local planner will exhibit a certain behaviour. If the robot, for example, should dynamically avoid obstacles that are not part of the costmap, it would make sense to reduce the gain of the cost that is based on the proximity to the global path and increase the gain of the cost that is related to the proximity to obstacles. It the robot should however follow exactelly the global path, different gain values might make more sense. The following gifs show two completely different strategies for local planning.
+
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 48%;"> <img src="resources/gifs/obstacle_avoidance.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/path_following.gif" width="350"/></td>
+  </tr>
+  <tr>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on avoiding obstacles (gain values: 18 12 15 15).
+    </td>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on staying on the global path (gain values: 28 2 80 1).
+    </td>
+  </tr>
+</table>
+
+Of course both strategies have advantages and disadvantages and it depends on the situation which version to use.
+Please be aware of the fact that the parameters are tuned for the robot to work in the gazebo simulation environment. Applying the local planner to real world conditions might require additional parameter tuning.
+
+
+
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery1.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery2.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery3.gif" width="350"/></td>
+  </tr>
+  <tr>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a fully blocked path.
+    </td>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a partly blocked path.
+    </td>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a trapped robot.
+    </td>
+  </tr>
+</table>
+
+
+
+
+
+
+
 
 All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
 
 ## Install and how to run
-
-
-
-### rto_map_server
-This package includes a node called 'map_server'.
-
-The map server transforms a .pgm file from the maps folder and adds meta information which is stored in the corresponding .yaml file. 
-This map server also works with multiple maps.
-To add a map to the map server simply append the map_server_params.yaml file in the config folder of the rto_map_server package.
-Keep in mind that the syntax has to match the syntax of 'map1' and the 'maps_nr' has to be updated.
-
-The input to the map server matches the commonly used structure from the ROS navigation stack.
-
-To launch the map server have a look at the launch folder of this package.
-
-#### Service 'get_map'
-request: map number (int64)  
-response: map (OccupancyGrid)
 
 
 
