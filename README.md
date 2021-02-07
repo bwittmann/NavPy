@@ -40,7 +40,7 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognised by the system, the accuracy of the loclization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laserscan range measurements. The figure bellow depicts the local costmap and a obstacle that is currently not part of the global costmap. 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed;">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 300px;">
   <tr>
     <td style="width: 300px;"> <img src="resources/images/local_costmap.png"></td>
   </tr>
@@ -87,7 +87,8 @@ response: success [bool]
 - `padded_val`: Value of the grid elements that are part of the 'hard padding' area.
 - `apply_soft_padding`: Apply the area of 'soft padding' to the global costmap.
 - `decay_distane`: Distance from the area of 'hard padding' that is affected by 'soft padding'.
-- `decay_type`: Decay type of the area of 'soft padding' (linear, exponential, reciprocal).
+- `decay_type`: Decay type of the area of 'soft padding' (linear, exponential, reciprocal).<br>
+
 `local_costmap`:
 - `length`: Width and height of the local costmap.
 - `frequency`: Frequency of updating the local costmap.
