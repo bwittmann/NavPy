@@ -169,6 +169,23 @@ Please be aware of the fact that the parameters are tuned for the robot to work 
 This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo Localization algorithm is used. The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the localization. Therfore the map used by the localization is updated by the rto_costmap_generator. The performance of the localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the localization or odometry. If the error is samller than a given treshold the estimated pose of the localization is used. Otherwise the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses an dynamic obstacle which is not yet included in the map. In the gif ... and gif ... it can be seen how the localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer or by recalculating a new path. If the localization is not accurate for several iterations it might happen, that the particles drift away. By increasing the variance in the prediction of the particles, the particles spread out and are able to catch the position of the robot again. This can be seen in gif ... .
 
 
+
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_obsactle_avoidance.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_replan.gif " width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
+  </tr>
+  <tr>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Pass dynamic obstacle solely by using local planer.
+    </td>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Update map of localization and recalculate the path.
+    </td>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Odometry is used if localization is not accurate and variance of particles is increased.
+    </td>
+  </tr>
+</table>
+
 #### Subscribed Topics
 ##### `/scan`
 laser scans of the robot to update the particles
