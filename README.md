@@ -187,7 +187,7 @@ The navigation is stack is able to work in a dynamic environment. Obstacles whic
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_obsactle_avoidance.gif" width="350"/></td>
     <td style="width: 48%;"> <img src="resources/gifs/localization_replan.gif " width="350"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="450"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Pass dynamic obstacle solely by using local planer.
