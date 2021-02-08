@@ -5,5 +5,5 @@ num_beams: 30
 update_rate: 10 # defines rate of prediction and update --> rate=20Hz/update_rate
 odom_noise: False # True, False
 launch_style: init # init,random (random just works with 400 particles, but with this big number of 				   computational cost in localization is high)
-localization_error: 4.5
-localization_error_percentage: 0.25
+normalized_commulated_localization_error: 12
+variance_increase_for_bad_localization: 2

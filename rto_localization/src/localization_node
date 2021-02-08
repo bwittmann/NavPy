@@ -32,8 +32,8 @@ class Particle(object):
 
 class ParticleFilter(object):
     def __init__(self, num_particles, occ_grid_map, eval_beams, dynamics_translation_noise_std_dev, 
-                dynamics_orientation_noise_std_dev, odom_noise, localization_error, 
-                localization_error_percentage):
+                dynamics_orientation_noise_std_dev, odom_noise, normalized_commulated_localization_error, 
+                variance_increase_for_bad_localization):
         """
         INIT of ParticleFilter class
 
@@ -43,18 +43,18 @@ class ParticleFilter(object):
         @params dynamics_translation_noise_std_dev: Variance used for the prediction of the particles in x, y
         @params dynamics_orientation_noise_std_dev: Variance used for the prediction of the particles yaw
         @params odom_noise: Bool value which defines whether noise should be incorperated in odometry
-        @params localization_error: If error of particle is samller than localization_error the particle is labeled as "good"
-        @params localization_error_percentage: This percentage defindes whether localization or odometry is used to localize the robot.
-        If more than localization_error_percentage particles are "good" labeled particles localization is used.
-
+        @params normalized_commulated_localization_error: normalized commulated error is treshhold which defines whether odometry or localization 
+                                                          is used for the robot position
+        @params variance_increase_for_bad_localization: Variance which defines the uncertainty when predicting particles is increased by this percentage,
+                                                        when odometry is used becuase localization is not accurate enough
         """
 
         #Particle Filter variables
         self.num_particles = num_particles
         self.eval_beams = eval_beams
         self.odom_noise = odom_noise
-        self.localization_error = localization_error
-        self.localization_error_percentage = localization_error_percentage
+        self.normalized_commulated_localization_error = normalized_commulated_localization_error
+        self.variance_increase_for_bad_localization = variance_increase_for_bad_localization
 
         self.particles = np.empty(self.num_particles, dtype=Particle)
         self.weights = np.array([1/self.num_particles]*self.num_particles)
@@ -86,6 +86,7 @@ class ParticleFilter(object):
         # uncertainty for dynamic model
         self.dynamics_translation_noise_std_dev = dynamics_translation_noise_std_dev
         self.dynamics_orientation_noise_std_dev = dynamics_orientation_noise_std_dev
+        self.adapt_std_for_bad_localization = 1
 
     def ogm_to_map(self, x_ogm, y_ogm, yaw_ogm):
         """
@@ -190,14 +191,14 @@ class ParticleFilter(object):
 
         weights_not_normalized = np.zeros((self.num_particles))
         num_right = 0
+        error_sum = 0
         
         # calculate weights
         for i in range(self.num_particles):
             self.particles[i].x, self.particles[i].y, self.particles[i].yaw = self._prediction(self.particles[i])
             error = self._update(laser_scan_msg, self.particles[i])
             weights_not_normalized[i] = exp(-error)
-            if error < self.localization_error:
-                num_right += 1
+            error_sum += error
 
         #commulated relative motion between 2 consecutive prediction set to 0
         self.dx = 0
@@ -211,11 +212,14 @@ class ParticleFilter(object):
         #resample
         self._resample()
 
-        if num_right > self.num_particles*self.localization_error_percentage:
+        #if num_right > self.num_particles*self.localization_error_percentage:
+        if error_sum/self.num_particles < self.normalized_commulated_localization_error:
             rospy.loginfo("LOCAL")
+            self.adapt_std_for_bad_localization = 1
             return True
         else:
             rospy.loginfo("ODOM")
+            self.adapt_std_for_bad_localization = self.adapt_std_for_bad_localization
             return False
 
     def _resample(self): #time = 0.0003
@@ -407,9 +411,9 @@ class ParticleFilter(object):
         """
 
         # Incorperate uncertainty to prediction. Adapt uncertainty to relative motion to not let relative motion dominate prediction
-        nx = random.gauss(0, self.dynamics_translation_noise_std_dev) * (abs(self.dx) + abs(self.dy))
-        ny = random.gauss(0, self.dynamics_translation_noise_std_dev) * (abs(self.dx) + abs(self.dy))
-        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev) * self.dyaw
+        nx = random.gauss(0, self.dynamics_translation_noise_std_dev) * (abs(self.dx) + abs(self.dy)) * self.adapt_std_for_bad_localization
+        ny = random.gauss(0, self.dynamics_translation_noise_std_dev) * (abs(self.dx) + abs(self.dy)) * self.adapt_std_for_bad_localization
+        nyaw = random.gauss(0, self.dynamics_orientation_noise_std_dev) * self.dyaw * self.adapt_std_for_bad_localization
 
         # predict particle according to odometry with  uncertainty
         x_new = particle.x + self.dx + nx
@@ -437,24 +441,12 @@ class ParticleFilter(object):
             x_in += self.weights[i] * x
             y_in += self.weights[i] * y
             yaw_in += self.weights[i] * yaw
-
+        
         # TF Transform from /hokuyo_link to /base_link
-        self.listener = tf.TransformListener()
-        now = rospy.Time.now()
-        self.listener.waitForTransform('/base_link', '/hokuyo_link', now, rospy.Duration(10.0))
-        pose_msg = PoseStamped()
-        pose_msg.header.frame_id = '/base_link'
-        pose_msg.pose.position.x=x_in
-        pose_msg.pose.position.y=y_in
-        q = transform.quaternion_from_euler(0,0,yaw_in)
-        pose_msg.pose.orientation.x = q[0]
-        pose_msg.pose.orientation.y = q[1]
-        pose_msg.pose.orientation.z = q[2]
-        pose_msg.pose.orientation.w = q[3]
-        new_pose = self.listener.transformPose('/hokuyo_link', pose_msg)
-        x,y = new_pose.pose.position.x, new_pose.pose.position.y
-        _, _, yaw = transform.euler_from_quaternion([new_pose.pose.orientation.x, new_pose.pose.orientation.y, new_pose.pose.orientation.z, new_pose.pose.orientation.w]) 
-
+        x = x_in-0.08*cos(yaw_in)
+        y = y_in-0.08*sin(yaw_in)
+        yaw = yaw_in
+        
         return x, y, yaw
 class MonteCarloLocalization(object):
 
@@ -490,12 +482,12 @@ class MonteCarloLocalization(object):
         self.update_rate = rospy.get_param("~update_rate")
         odom_noise = rospy.get_param("~odom_noise")
         launch_style = rospy.get_param("~launch_style")
-        localization_error = rospy.get_param("~localization_error")
-        localization_error_percentage = rospy.get_param("~localization_error_percentage")
+        normalized_commulated_localization_error = rospy.get_param("~normalized_commulated_localization_error")
+        variance_increase_for_bad_localization = rospy.get_param("~variance_increase_for_bad_localization")
 
         # Init ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, self.eval_beams, dynamics_translation_noise_std_dev, dynamics_orientation_noise_std_dev,
-                                odom_noise, localization_error, localization_error_percentage)
+                                odom_noise, normalized_commulated_localization_error, variance_increase_for_bad_localization)
 
         # Initialize particles of Particle Filter
         self.pf.init_particles(type=launch_style)
@@ -590,8 +582,7 @@ class MonteCarloLocalization(object):
         # Get robot pose from odometry message in /odom frame
         x_Odometry = odometry_for_tf.pose.pose.position.x
         y_Odometry = odometry_for_tf.pose.pose.position.y
-        orientation_odometry = (odometry_for_tf.pose.pose.orientation.x, odometry_for_tf.pose.pose.orientation.y, odometry_for_tf.pose.pose.orientation.z, odometry_for_tf.pose.pose.orientation.w)
-
+        orientation_odometry = np.array([odometry_for_tf.pose.pose.orientation.x, odometry_for_tf.pose.pose.orientation.y, odometry_for_tf.pose.pose.orientation.z, odometry_for_tf.pose.pose.orientation.w])
         # Calculate difference between odometry and map pose to calculate TF between /map and /odom
         self.x_diff = x_Particle_Filter-x_Odometry
         self.y_diff = y_Particle_Filter-y_Odometry
@@ -697,7 +688,7 @@ class MonteCarloLocalization(object):
                     timestamp = self.observation.header.stamp.to_sec()
 
                     # measurement update
-                    publish = self.pf.handle_observation(self.observation)
+                    localization_is_accurate = self.pf.handle_observation(self.observation)
 
                     self.lock.acquire()
 
@@ -709,15 +700,11 @@ class MonteCarloLocalization(object):
                     self.odometry_list = np.empty(0).copy()
                     self.lock.release()
                     
-
-                    # Publish
-                    if first_iteration:
+                    # Update TF just if localization is accurate
+                    if first_iteration or localization_is_accurate:
                         self._update_frame_transformation(odometry_for_tf)
-                        self._broadcast_frame_transformation()
                         first_iteration = False
-                    elif publish:
-                        self._update_frame_transformation(odometry_for_tf)
-                        self._broadcast_frame_transformation()
+                    self._broadcast_frame_transformation()
                     self._publish()
                     i += 1
 
