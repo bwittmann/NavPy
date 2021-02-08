@@ -181,7 +181,7 @@ This package contains the rto_localization node, which is responsible for locali
     </td>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Update map of localization and recalculate the path.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Odometry is used if localization is not accurate and variance of particles is increased.
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> If localization is not accurate, the dometry is used to estimate the robot pose. Then the variance of the particles is increased until the localization performance increases
     </td>
   </tr>
 </table>
