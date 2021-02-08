@@ -164,6 +164,37 @@ Please be aware of the fact that the parameters are tuned for the robot to work 
   </tr>
 </table>
 
+### rto_localization
+#### Description
+This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo Localization algorithm is used. The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the localization. Therfore the map used by the localization is updated by the rto_costmap_generator. The performance of the localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the localization or odometry. If the error is samller than a given treshold the estimated pose of the localization is used. Otherwise the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses an dynamic obstacle which is not yet included in the map. In the gif ... and gif ... it can be seen how the localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer or by recalculating a new path. If the localization is not accurate for several iterations it might happen, that the particles drift away. By increasing the variance in the prediction of the particles, the particles spread out and are able to catch the position of the robot again. This can be seen in gif ... .
+
+
+#### Subscribed Topics
+##### `/scan`
+laser scans of the robot to update the particles
+##### `/odom`
+motion of the robot to predict particles
+##### `/global_costmap`
+updates the map used by the odometry
+#### Published Topics
+##### `/particles`
+Visualization of all particles in RVIZ as red arrows
+##### `/particle`
+Visualization of the estimated pose of the localization in RVIZ as green arrow
+##### `/pose`
+estimated pose of the localization
+#### Services
+None
+#### Configuration
+`dynamics_translation_noise_std_dev`: Each particle is predicted translative according to the odometry and a given translation uncertainty.
+`dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a given orientation uncertainty.
+`num_particles`: Number of particles used in the Monte Carlo Localization. Due to computational cost this is a limiting factor of the algorithm and depends on the machine you are running the navigation algorithm
+`num_beams`: Number of laserbeams used for updating the particles. The algorithm therefore subsamples equally from all the laserbeams delivered by the laser scanner of the robot.
+`update_rate`: This defines the prediction and update rate of the Monte Carlo Localization.
+`launch_style`: The particles of the localization can be initialized randomly in the whole map or close to the position where the robot is spawnd. When the particles are initialized randomly at least 400 particles are necessary.
+`normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot pose
+`variance_increase_for_bad_localization`: Percentage with which the translation and orientation uncertainty is increased when the localization is not accruate and the odometry is used to estimate the pose of the robot.
+
 
 
 
