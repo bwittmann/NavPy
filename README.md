@@ -174,7 +174,7 @@ This package contains the rto_localization node, which is responsible for locali
     <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on avoiding obstacles (gain values: 18 12 15 15).
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Monte Carlo Localization
     </td>
   </tr>
 </table>
@@ -194,7 +194,7 @@ The navigation is stack is able to work in a dynamic environment. Obstacles whic
     </td>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Update map of localization and recalculate the path.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> If localization is not accurate, the dometry is used to estimate the robot pose. Then the variance of the particles is increased until the localization performance increases
+    <td style="width: 60%;" valign="top"> <b>Gif.x:</b> If localization is not accurate, the dometry is used to estimate the robot pose. Then the variance of the particles is increased until the localization performance increases
     </td>
   </tr>
 </table>
