@@ -212,6 +212,7 @@ class ParticleFilter(object):
         #resample
         self._resample()
 
+        rospy.loginfo(error_sum/self.num_particles)
         #if num_right > self.num_particles*self.localization_error_percentage:
         if error_sum/self.num_particles < self.normalized_commulated_localization_error:
             rospy.loginfo("LOCAL")
@@ -220,6 +221,7 @@ class ParticleFilter(object):
         else:
             rospy.loginfo("ODOM")
             self.adapt_std_for_bad_localization = self.adapt_std_for_bad_localization
+            #self.adapt_std_for_bad_localization = error_sum/5
             return False
 
     def _resample(self): #time = 0.0003
@@ -395,7 +397,7 @@ class ParticleFilter(object):
 
         # inlcude noise to odometry
         if self.odom_noise == True:
-            diff_position += random.gauss(0, 0.1)*diff_position
+            diff_position += random.gauss(0, 0.4)*diff_position
     
 
         #add relative motion to commulated relativ motion which is used in next prediction
@@ -529,6 +531,7 @@ class MonteCarloLocalization(object):
 
         # Store laser scan message
         self.observation = msg
+        rospy.loginfo(len(msg.intensities))
 
         self.lock.release()
 

@@ -16,8 +16,8 @@ safety_distance: 0.15
 # Min and max velocity values of the rto.
 min_linear_vel: 0 # Unit: m/s
 max_linear_vel: 0.2 # Unit: m/s
-min_angular_vel: -0.6 # Unit: rad/s
-max_angular_vel: 0.6  # Unit: rad/s
+min_angular_vel: -0.8 # Unit: rad/s
+max_angular_vel: 0.8  # Unit: rad/s
 
 # Max acceleration and deceleration that can be achieved by the rto.
 max_acc: 0.3 # Unit: m/s^2, rad/s^2
