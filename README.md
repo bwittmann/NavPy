@@ -45,7 +45,7 @@ Contains world models etc. for bringing up a simulation environment (e.g. gazebo
 
 ### Related Repositories
 
-All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
+All other packages have been adapted from the following two repositories by dietro
 
 #### [rto_simulation](https://github.com/dietriro/rto_simulation)
 This repository contains everything needed for using the RTO in a simulated environment, like Gazebo.
@@ -277,6 +277,13 @@ response: map [nav_msgs/OccupancyGrid]
 `launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned. When the particles are initialized randomly at least 400 particles are necessary.<br>
 `normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot pose.<br>
 `variance_increase_for_bad_localization`: Percentage with which the translation and orientation uncertainty is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot.<br>
+
+### rto_navigation
+#### Description
+
+
+### rto_worlds
+#### Description
 
 
 
