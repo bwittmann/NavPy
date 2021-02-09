@@ -537,9 +537,8 @@ class main():
 
         # Initialize Subscribers
         self.sub_map = rospy.Subscriber('/global_costmap', OccupancyGrid, self.callback_costmap)
-        # self.sub_pos = rospy.Subscriber('/pose', PoseStamped, self.callback_pos)
         self.sub_pos = rospy.Subscriber('/odom', Odometry, self.callback_pos)
-        self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.callback_goal)
+        self.sub_goal = rospy.Subscriber('/goal', PoseStamped, self.callback_goal)
 
         # Initialize Publisher
         self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
@@ -654,7 +653,7 @@ class main():
         while not rospy.is_shutdown():
 
             # wait for goal input to start global planner
-            rospy.wait_for_message('/move_base_simple/goal', PoseStamped)
+            rospy.wait_for_message('/goal', PoseStamped)
             global_planner = Bidirectional_Astar_Planner()
 
             # initialize start node

@@ -103,7 +103,7 @@ class DWALocalPlanner():
         # Init publisher
         self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         self.pub_local_path = rospy.Publisher('/visualization/local_path', Marker, queue_size=10)
-        self.pub_goal = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
+        self.pub_goal = rospy.Publisher('/goal', PoseStamped, queue_size=10)
 
         # Setup marker for visualization of local path
         self.local_plan_marker = Marker()
