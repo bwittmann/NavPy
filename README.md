@@ -27,27 +27,26 @@ In the following, all packages within this repository are briefly explained.
 Core Repository
 
 ### rto_bringup
-    Contains config, script and launch files for starting the robot in the real-world.
+Contains config, script and launch files for starting the robot in the real-world.
 ### rto_core
-    The meta-package of this repository.
+The meta-package of this repository.
 ### rto_description
-    Contains all model (visual) data of the robot and its components (sensors). </br>
+Contains all model (visual) data of the robot and its components (sensors).
 ### rto_local_move
-    Contains code for moving the robot locally.
+Contains code for moving the robot locally.
 ### rto_local_planner
-    Contains a local planner plugin for move-base, specifically designed for the RTO. </br>
+Contains a local planner plugin for move-base, specifically designed for the RTO.
 ### rto_msgs
-    Contains special messages needed only for the RTO.
+Contains special messages needed only for the RTO.
 ### rto_navigation
-    Contains launch and configuration files for starting the robots navigation and mapping.
+Contains launch and configuration files for starting the robots navigation and mapping.
 ### rto_node
-    Contains the core source code of the RTO, especially for communication with the rest of the robots hardware.
+Contains the core source code of the RTO, especially for communication with the rest of the robots hardware.
 ### rto_safety
-    Contains a node for collision avoidance, that remaps the velocity in case there is no obstacle in the way.
+Contains a node for collision avoidance, that remaps the velocity in case there is no obstacle in the way.
 ### rto_teleop
-    Contains launch files for teleoperating the RTO using either a keyboard or a joystick.
+Contains launch files for teleoperating the RTO using either a keyboard or a joystick.
 
-If you want to operate the robot in a simulated environment (e.g. Gazebo) then please have a look at the related repositories below.
 
 
 ## Packages
