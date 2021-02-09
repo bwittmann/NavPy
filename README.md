@@ -29,16 +29,15 @@ Core Repository
 ### Core Repository
 
 #### [rto_costmap_generator](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_costmap_generator)
-Generates the local and the global costmap. 
-
-#### [rto_global_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_global_planner)
-Plans a path between the robot pose and an arbitrary valid goal
+Generates the local and the global costmap.
+#### [rto_map_server](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_map_server)
+Transforms a pgm file to a OccupancyGrid message
 #### [rto_local_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_local_planner)
 Creates a local path and allows the robot to follow the global path
 #### [rto_localization](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_localization)
-Localizes the robot
-#### [rto_map_server](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_map_server)
-Transforms a pgm file to a OccupancyGrid message
+Localizes the robot in the map
+#### [rto_global_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_global_planner)
+Plans a path between the robot pose and an arbitrary valid goal
 #### [rto_navigation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_navigation)
 Contains launch and configuration files for starting the robots navigation.
 #### [rto_worlds](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_worlds)
@@ -46,12 +45,23 @@ Contains world models etc. for bringing up a simulation environment (e.g. gazebo
 
 ### Related Repositories
 
+All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
+
 #### [rto_simulation](https://github.com/dietriro/rto_simulation)
 This repository contains everything needed for using the RTO in a simulated environment, like Gazebo.
-
+- [rto_bringup_sim](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_bringup_sim)
+- [rto_simulation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_simulation)
 
 ##### [rto_core](https://github.com/dietriro/rto_core#robotino-core)
 This repository contains everything needed to start-up the RTO in a simulated environment or the real-world, including localization and navigation. 
+- [rto_bringup](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_bringup) 
+- [rto_core](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_core)
+- [rto_description](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_description)
+- [rto_msgs](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_msgs)
+- [rto_node](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_node)
+- [rto_safety](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_safety)
+- [rto_teleop](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_teleop)
+
 
 
 
@@ -274,17 +284,6 @@ response: map [nav_msgs/OccupancyGrid]
 
 
 
-
-All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
-- rto_bringup
-- rto_bringup_sim
-- rto_core
-- rto_description
-- rto_msgs
-- rto_node
-- rto_safety
-- rto_simulation
-- rto_teleop
 
 
 ## Install and how to run
