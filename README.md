@@ -10,6 +10,7 @@
 # NavPy
 
 ## Introduction
+A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ros navigation stack](http://wiki.ros.org/navigation).
 
 ## Structure/Overview
 
@@ -209,29 +210,32 @@ If the localization is not accurate for several iterations it might happen, that
 
 #### Subscribed Topics
 ##### `/scan`
-laser scans of the robot to update the particles
+Laser scan of the robot to update the particles
 ##### `/odom`
-motion of the robot to predict particles
+Motion of the robot estimated by odometry to predict particles
 ##### `/global_costmap`
-updates the map used by the odometry
+Update dynamic obstacles in the map used by the localization
 #### Published Topics
 ##### `/particles`
 Visualization of all particles in RVIZ as red arrows
 ##### `/particle`
 Visualization of the estimated pose of the localization in RVIZ as green arrow
 ##### `/pose`
-estimated pose of the localization
+Estimated pose of the localization
 #### Services
-None
+##### `/get_map`
+Service that loads map of the static world.<br>
+request: map_nr [int64]<br>
+response: map [nav_msgs/OccupancyGrid]
 #### Configuration
-`dynamics_translation_noise_std_dev`: Each particle is predicted translative according to the odometry and a given translation uncertainty.<br>
+`dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a given translation uncertainty.<br>
 `dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a given orientation uncertainty.<br>
-`num_particles`: Number of particles used in the Monte Carlo Localization. Due to computational cost this is a limiting factor of the algorithm and depends on the machine you are running the navigation algorithm.<br>
-`num_beams`: Number of laserbeams used for updating the particles. The algorithm subsamples equally from all the laserbeams delivered by the laser scanner of the robot.<br>
+`num_particles`: Number of particles used in the Monte Carlo Localization. Due to computational cost this is a limiting factor of the algorithm and depends on the machine which is used to run the navigation algorithm.<br>
+`num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams delivered by the laser scanner of the robot.<br>
 `update_rate`: This defines the prediction and update rate of the Monte Carlo Localization.<br>
-`launch_style`: The particles of the localization can be initialized randomly in the whole map or close to the position where the robot is spawnd. When the particles are initialized randomly at least 400 particles are necessary.<br>
+`launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned. When the particles are initialized randomly at least 400 particles are necessary.<br>
 `normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot pose.<br>
-`variance_increase_for_bad_localization`: Percentage with which the translation and orientation uncertainty is increased when the localization is not accruate and the odometry is used to estimate the pose of the robot.<br>
+`variance_increase_for_bad_localization`: Percentage with which the translation and orientation uncertainty is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot.<br>
 
 
 
