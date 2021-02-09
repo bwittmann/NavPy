@@ -270,6 +270,7 @@ request: map_nr [int64]<br>
 response: map [nav_msgs/OccupancyGrid]
 #### Configuration
 `dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a gaussian noise with this translation uncertainty.<br>
+<br>
 `dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this orientation uncertainty.<br>
 `num_particles`: Number of particles used in the Monte Carlo Localization. An increased number of particles would increase the performance of the algorithm. Due to computational cost this is a limiting factor and depends on the machine which is used to run the navigation algorithm.<br>
 `num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the laser scanner of the robot.<br>
