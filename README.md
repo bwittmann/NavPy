@@ -26,26 +26,32 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 In the following, all packages within this repository are briefly explained.
 Core Repository
 
-### rto_bringup
-Contains config, script and launch files for starting the robot in the real-world.
-### rto_core
-The meta-package of this repository.
-### rto_description
-Contains all model (visual) data of the robot and its components (sensors).
-### rto_local_move
-Contains code for moving the robot locally.
-### rto_local_planner
-Contains a local planner plugin for move-base, specifically designed for the RTO.
-### rto_msgs
-Contains special messages needed only for the RTO.
-### rto_navigation
-Contains launch and configuration files for starting the robots navigation and mapping.
-### rto_node
-Contains the core source code of the RTO, especially for communication with the rest of the robots hardware.
-### rto_safety
-Contains a node for collision avoidance, that remaps the velocity in case there is no obstacle in the way.
-### rto_teleop
-Contains launch files for teleoperating the RTO using either a keyboard or a joystick.
+### Core Repository
+
+#### [rto_costmap_generator](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_costmap_generator)
+Generates the local and the global costmap. 
+
+#### [rto_global_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_global_planner)
+Plans a path between the robot pose and an arbitrary valid goal
+#### [rto_local_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_local_planner)
+Creates a local path and allows the robot to follow the global path
+#### [rto_localization](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_localization)
+Localizes the robot
+#### [rto_map_server](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_map_server)
+Transforms a pgm file to a OccupancyGrid message
+#### [rto_navigation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_navigation)
+Contains launch and configuration files for starting the robots navigation.
+#### [rto_worlds](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_worlds)
+Contains world models etc. for bringing up a simulation environment (e.g. gazebo).
+
+### Related Repositories
+
+#### [rto_simulation](https://github.com/dietriro/rto_simulation)
+This repository contains everything needed for using the RTO in a simulated environment, like Gazebo.
+
+
+##### [rto_core](https://github.com/dietriro/rto_core#robotino-core)
+This repository contains everything needed to start-up the RTO in a simulated environment or the real-world, including localization and navigation. 
 
 
 
