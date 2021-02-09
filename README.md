@@ -26,26 +26,26 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 In the following, all packages within this repository are briefly explained.
 Core Repository
 
-###rto_bringup</br>
-    Contains config, script and launch files for starting the robot in the real-world.</br>
-###rto_core</br>
-    The meta-package of this repository. </br>
-###rto_description</br>
+### rto_bringup
+    Contains config, script and launch files for starting the robot in the real-world.
+### rto_core
+    The meta-package of this repository.
+### rto_description
     Contains all model (visual) data of the robot and its components (sensors). </br>
-###rto_local_move</br>
-    Contains code for moving the robot locally. </br>
-###rto_local_planner</br>
+### rto_local_move
+    Contains code for moving the robot locally.
+### rto_local_planner
     Contains a local planner plugin for move-base, specifically designed for the RTO. </br>
-###rto_msgs</br>
-    Contains special messages needed only for the RTO. </br>
-###rto_navigation</br>
-    Contains launch and configuration files for starting the robots navigation and mapping. </br>
-###rto_node</br>
-    Contains the core source code of the RTO, especially for communication with the rest of the robots hardware. </br>
-###rto_safety</br>
-    Contains a node for collision avoidance, that remaps the velocity in case there is no obstacle in the way. </br>
-###rto_teleop</br>
-    Contains launch files for teleoperating the RTO using either a keyboard or a joystick. </br>
+### rto_msgs
+    Contains special messages needed only for the RTO.
+### rto_navigation
+    Contains launch and configuration files for starting the robots navigation and mapping.
+### rto_node
+    Contains the core source code of the RTO, especially for communication with the rest of the robots hardware.
+### rto_safety
+    Contains a node for collision avoidance, that remaps the velocity in case there is no obstacle in the way.
+### rto_teleop
+    Contains launch files for teleoperating the RTO using either a keyboard or a joystick.
 
 If you want to operate the robot in a simulated environment (e.g. Gazebo) then please have a look at the related repositories below.
 
