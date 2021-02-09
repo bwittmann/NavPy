@@ -14,7 +14,7 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="500"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> NavPy
@@ -76,9 +76,9 @@ In order to allow the use of a point representation of the mobile robot for path
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 48%;"> <img src="resources/images/map_expo02.png"></td>
-    <td style="width: 48%;"> <img src="resources/images/map_expo1.png"></td>
-    <td style="width: 48%;"> <img src="resources/images/map_linear1.png"></td>
+    <td style="width: 48%;"> <img src="resources/images/map_expo02.png" width='300'></td>
+    <td style="width: 48%;"> <img src="resources/images/map_expo1.png" width='300'></td>
+    <td style="width: 48%;"> <img src="resources/images/map_linear1.png" width='300'></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>Fig.x:</b> 'Exponential' soft padding (0.2 m).
@@ -93,9 +93,9 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognised by the system, the accuracy of the loclization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laserscan range measurements. The figure bellow depicts the local costmap and a obstacle that is currently not part of the global costmap. 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 300px;">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 300px;"> <img src="resources/images/local_costmap.png"></td>
+    <td style="width: 300px;"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
   <tr>
     <td style="width: 300px;" valign="top"> <b>Fig.x:</b> Local costmap (green).
@@ -199,20 +199,27 @@ The overall cost for a control pair is 0 if the robot travels with its maximal l
 Of course both strategies have advantages and disadvantages and it depends on the situation which version to use.
 Please be aware of the fact that the parameters are tuned for the robot to work in the gazebo simulation environment. Applying the local planner to real world conditions might require additional parameter tuning.
 
+The local planner node not only estimates the best control values, but also initialize a so called recovery behaviour that adds the local costmap to the global costmap via the service 'add_local_costmap' and publishes the current goal position again to initiate a replanning of the global path. This is necessary in order to allow the system to react to changes in the world it operates in. Therefore, the local planner needs a couple of measures to decide if a recovery behaviour is necessary. The implemented measures are listed below:
+
+- small linear velocity
+- circling
+- execution time of the current path
+
+Based on the values of the related parameters a recovery behaviour will be carried out when the linear velocity is below a certain threashold for a certain amount of time. This can often be traced back to a global path blocked by an obstacle which is currently not included in the global costmap. This particular case can also lead to the robot circling infront of the obstacle. For this reason, a recovery behaviour is also initialized when the sign of the robots angular velocity does not change for a specific time period. The last measure for initializing a recovery behaviour is the execution time of the current path. If the robot takes longer than expected to reach the goal position, this might also indicate that a recovery behaviour makes sense in this situation. The gifs below demonstrate the typical scenarious that lead to a initialization and execution of a recovery behaviour.
 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/recovery1.gif" width="350"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery2.gif" width="350"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery3.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery5.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery6.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a fully blocked path.
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a small linear velocity.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a partly blocked path.
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on circling.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a trapped robot.
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on path execution time.
     </td>
   </tr>
 </table>
