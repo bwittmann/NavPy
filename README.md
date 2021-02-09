@@ -172,9 +172,12 @@ This package contains the rto_localization node, which is responsible for locali
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Monte Carlo Localization
+    </td>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> If localization is not accurate, the dometry is used to estimate the robot pose. Then the variance of the particles is increased until the localization performance increases
     </td>
   </tr>
 </table>
@@ -187,14 +190,12 @@ The navigation is stack is able to work in a dynamic environment. Obstacles whic
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_obsactle_avoidance.gif" width="350"/></td>
     <td style="width: 48%;"> <img src="resources/gifs/localization_replan.gif " width="350"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Pass dynamic obstacle solely by using local planer.
     </td>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Update map of localization and recalculate the path.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> If localization is not accurate, the dometry is used to estimate the robot pose. Then the variance of the particles is increased until the localization performance increases
     </td>
   </tr>
 </table>
