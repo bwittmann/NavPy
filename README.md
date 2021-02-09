@@ -295,6 +295,13 @@ close to the position where the robot is spawned. When the particles are initial
 
 ### rto_global_planner
 #### Description
+This package contains the global_planner_node, which creates a global path that can be used by local_planner.
+
+The global planner is based on bi_directional astar algorithm. At the beginning, we start search both from current position and goal position. After each iteration, check whether there is an intersection between open list from start point and  goal point. If there is an intersection, then connect the path from start point and end point. In this case, the path might look like very strange, then we do path smoothing to avoid unnecessary turns. At last, to make sure local_planner will get a dense path which is represented by nodes next to each other, path argumentation is applied.
+
+TODO: add pictures show the evolution of path
+
+If there is no path from start point to goal point found at the first time, the global_planner will call service 'clear_map'.
 
 #### Subscribed Topics
 ##### `/global_costmap`
