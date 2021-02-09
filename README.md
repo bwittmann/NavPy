@@ -272,11 +272,18 @@ response: map [nav_msgs/OccupancyGrid]
 `dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a gaussian noise with this translation uncertainty.<br>
 <br>
 `dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this orientation uncertainty.<br>
+<br>
 `num_particles`: Number of particles used in the Monte Carlo Localization. An increased number of particles would increase the performance of the algorithm. Due to computational cost this is a limiting factor and depends on the machine which is used to run the navigation algorithm.<br>
+<br>
 `num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the laser scanner of the robot.<br>
+<br>
 `update_rate`: This defines the prediction and update rate of the Monte Carlo Localization.<br>
-`launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned. When the particles are initialized randomly at least 400 particles are necessary.<br>
+<br>
+`launch_style`: The particles of the localization can be initialized randomly in the map or 
+close to the position where the robot is spawned. When the particles are initialized randomly at least 400 particles are necessary.<br>
+<br>
 `normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot pose.<br>
+<br>
 `variance_increase_for_bad_localization`:Defines how much the translation and orientation uncertainty is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
 
 ### rto_navigation
