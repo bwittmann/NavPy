@@ -293,12 +293,27 @@ close to the position where the robot is spawned. When the particles are initial
 ### rto_worlds
 #### Description
 
+### rto_global_planner
+#### Description
 
-
-
-
-
-
+#### Subscribed Topics
+##### `/global_costmap`
+To receive the padded costmap used to plan a feasible path
+##### `/odom`
+To receive the current position of robot as the start point
+##### `/goal`
+To receive the arranged point in map as the end point
+#### Published Topics
+##### `/global_path`
+To publish the generated path message as a feasible path from current location to goal
+##### `/visualization/plan`
+To publish a visualized plan in rviz
+#### Services
+##### `/clear_map`
+Service that resets the global costmap to its original state in case there is no path find from start point to end point at the first time, to avoid the situation that there is a path but a temporary obstacle makes it impossible to be found.
+All additionally added obstacles will be deleted.<br>
+request: command [string] ('clear')<br>
+response: success [bool]
 
 
 ## Install and how to run
