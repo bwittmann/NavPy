@@ -481,7 +481,8 @@ class MonteCarloLocalization(object):
         dynamics_orientation_noise_std_dev   = rospy.get_param("~dynamics_orientation_noise_std_dev")
         self.eval_beams = rospy.get_param("~num_beams")
         num_particles = rospy.get_param("~num_particles")
-        self.update_rate = rospy.get_param("~update_rate")
+        update_rate_iteration = rospy.get_param("~update_rate")
+        self.update_rate = int(20/update_rate_iteration)
         odom_noise = rospy.get_param("~odom_noise")
         launch_style = rospy.get_param("~launch_style")
         normalized_commulated_localization_error = rospy.get_param("~normalized_commulated_localization_error")
@@ -531,7 +532,6 @@ class MonteCarloLocalization(object):
 
         # Store laser scan message
         self.observation = msg
-        rospy.loginfo(len(msg.intensities))
 
         self.lock.release()
 
