@@ -17,14 +17,37 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
     <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Monte Carlo Localization
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> NavPy
     </td>
   </tr>
 </table>
 
 ## Structure/Overview
-The NavPy repository consists of several ros packages. which were 
+In the following, all packages within this repository are briefly explained.
+Core Repository
 
+###rto_bringup
+    Contains config, script and launch files for starting the robot in the real-world. 
+###rto_core
+    The meta-package of this repository. 
+###rto_description
+    Contains all model (visual) data of the robot and its components (sensors). 
+###rto_local_move
+    Contains code for moving the robot locally. 
+###rto_local_planner
+    Contains a local planner plugin for move-base, specifically designed for the RTO. 
+###rto_msgs
+    Contains special messages needed only for the RTO. 
+###rto_navigation
+    Contains launch and configuration files for starting the robots navigation and mapping. 
+###rto_node
+    Contains the core source code of the RTO, especially for communication with the rest of the robots hardware. 
+###rto_safety
+    Contains a node for collision avoidance, that remaps the velocity in case there is no obstacle in the way. 
+###rto_teleop
+    Contains launch files for teleoperating the RTO using either a keyboard or a joystick. 
+
+If you want to operate the robot in a simulated environment (e.g. Gazebo) then please have a look at the related repositories below.
 
 
 ## Packages
@@ -181,7 +204,7 @@ Please be aware of the fact that the parameters are tuned for the robot to work 
 
 ### rto_localization
 #### Description
-This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used.
+This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used.<br>
 The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the Monte Carlo localization. Therefore the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the Monte Carlo localization or odometry. If the error is smaller than a given threshold the estimated pose of the Monte Carlo localization is used. Otherwise, the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. The localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer in gif ... or by recalculating a new path in gif ... .
 
 
