@@ -178,7 +178,7 @@ This package contains the rto_localization node, which is responsible for locali
   </tr>
 </table>
 
-The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the Monte Carlo localization. Therfore the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the Monte Carlo localization or odometry. If the error is samller than a given treshold the estimated pose of the Monte Carlo localization is used. Otherwise the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses an dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. The localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer in gif ... or by recalculating a new path in gif ... .
+The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the Monte Carlo localization. Therefore the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the Monte Carlo localization or odometry. If the error is smaller than a given threshold the estimated pose of the Monte Carlo localization is used. Otherwise, the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. The localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer in gif ... or by recalculating a new path in gif ... .
 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
@@ -195,13 +195,13 @@ The navigation is stack is able to work in a dynamic environment. Obstacles whic
   </tr>
 </table>
 
-If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out and are able to catch the position of the robot again. This can be seen in gif ... . To make sure that the variance is not domonating the prediction of the particles, it is adapted to the angular and translational velocity of 
+If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out and are able to catch the position of the robot again. This can be seen in gif ... . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> If localization is not accurate, the dometry is used to estimate the robot pose. Then the variance of the particles is increased until the localization performance increases
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
     </td>
   </tr>
 </table>
