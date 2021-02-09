@@ -10,11 +10,25 @@
 # NavPy
 
 ## Introduction
-A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ros navigation stack](http://wiki.ros.org/navigation).
+A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ros navigation stack](http://wiki.ros.org/navigation). The prerequisites which are mentioned in the ros-navigation stack are also relevant for the NavPy navigation stack. The allgorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
+
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="350"/></td>
+  </tr>
+  <tr>
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Monte Carlo Localization
+    </td>
+  </tr>
+</table>
 
 ## Structure/Overview
+The NavPy repository consists of several ros packages. which were 
+
+
 
 ## Packages
+In the following, all packages within this repository are briefly explained
 
 ### rto_costmap_generator
 #### Description
@@ -168,17 +182,6 @@ Please be aware of the fact that the parameters are tuned for the robot to work 
 ### rto_localization
 #### Description
 This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used.
-
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
-  <tr>
-    <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="350"/></td>
-  </tr>
-  <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Monte Carlo Localization
-    </td>
-  </tr>
-</table>
-
 The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the Monte Carlo localization. Therefore the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the Monte Carlo localization or odometry. If the error is smaller than a given threshold the estimated pose of the Monte Carlo localization is used. Otherwise, the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. The localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer in gif ... or by recalculating a new path in gif ... .
 
 
@@ -245,6 +248,16 @@ response: map [nav_msgs/OccupancyGrid]
 
 
 All other packages have been adapted from https://github.com/dietriro/rto_core and https://github.com/dietriro/rto_simulation.
+- rto_bringup
+- rto_bringup_sim
+- rto_core
+- rto_description
+- rto_msgs
+- rto_node
+- rto_safety
+- rto_simulation
+- rto_teleop
+
 
 ## Install and how to run
 
