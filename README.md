@@ -299,9 +299,7 @@ This package contains the global_planner_node, which creates a global path that 
 
 The global planner is based on bi_directional astar algorithm. At the beginning, we start search both from current position and goal position. After each iteration, check whether there is an intersection between open list from start point and  goal point. If there is an intersection, then connect the path from start point and end point. In this case, the path might look like very strange, then we do path smoothing to avoid unnecessary turns. At last, to make sure local_planner will get a dense path which is represented by nodes next to each other, path argumentation is applied.
 
-TODO: add pictures show the evolution of path
-
-If there is no path from start point to goal point found at the first time, the global_planner will call service 'clear_map'.
+If there is no path from start point to goal point found at the first time, the global_planner will call service `/clear_map`. Then plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles, and this makes it impossible to find a path from start to goal. After a while, the obstacle disappeared, which makes us capable to find a path. So we call service `/clear_map` to make sure if it is solvable without temperoary obstacles.
 
 #### Subscribed Topics
 ##### `/global_costmap`
