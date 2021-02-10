@@ -26,12 +26,12 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 In the following, all packages within this repository are briefly explained.
 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 500%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 300px;"> <img src="resources/images/rosgraph.png" width='300'></td>
+    <td style="width: 600px;"> <img src="resources/images/rosgraph.png" width='600'></td>
   </tr>
   <tr>
-    <td style="width: 300px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
+    <td style="width: 600px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
   </tr>
 </table>
 
