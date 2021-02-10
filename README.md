@@ -26,7 +26,7 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 In the following, all packages within this repository are briefly explained.
 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 200%">
   <tr>
     <td style="width: 300px;"> <img src="resources/images/rosgraph.png" width='300'></td>
   </tr>
