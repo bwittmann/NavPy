@@ -28,10 +28,10 @@ In the following, all packages within this repository are briefly explained.
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 600px;"> <img src="resources/images/rosgraph.png" width='600'></td>
+    <td style="width: 1000px;"> <img src="resources/images/rosgraph.png" width='1000'></td>
   </tr>
   <tr>
-    <td style="width: 600px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
+    <td style="width: 1000px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
   </tr>
 </table>
 
