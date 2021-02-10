@@ -394,7 +394,7 @@ Visualization Manager:
       Marker Topic: /visualization/local_path
       Name: LocalPath
       Namespaces:
-        navigation: true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -402,7 +402,7 @@ Visualization Manager:
       Marker Topic: /visualization/plan
       Name: GlobalPath
       Namespaces:
-        navigation: true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -456,7 +456,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 4.80998420715332
+      Distance: 9.038771629333496
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -493,4 +493,4 @@ Window Geometry:
     collapsed: true
   Width: 1386
   X: 421
-  Y: 105
+  Y: 68
