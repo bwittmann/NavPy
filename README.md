@@ -333,17 +333,33 @@ To receive the arranged point in map as the end point
 To publish the generated path message as a feasible path from current location to goal
 ##### `/visualization/plan`
 To publish a visualized plan in rviz
-#### Services
-##### `/clear_map`
-Service that resets the global costmap to its original state in case there is no path find from start point to end point at the first time, to avoid the situation that there is a path but a temporary obstacle makes it impossible to be found.
-All additionally added obstacles will be deleted.<br>
-request: command [string] ('clear')<br>
-response: success [bool]
 
 
-## Install and how to run
+## Installation
+In order to use the robot you first have to install Ubuntu Focal (20.04) as well as ROS Noetic, which currently is the only supported ROS version of this repository. Besides, you will need to install necessary dependencies of robotino robot. For details in installing of Ros Noetic as well as all necessary dependencies, please refer to [rto_core](https://github.com/dietriro/rto_core).
 
+Afterwards you have to clone this repository to your catkin space and build it.
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/KathiWinter/rto_Robot_Navigation.git
+cd ~/catkin_ws
+rosdep install -y --from-paths src --ignore-src --rosdistro noetic --os=ubuntu:focal
+catkin build
+```
 
+## Usage
+To use this robot in simulation world, you will have to specify robot and enviornment first.
+
+    export ROBOT=rto-1
+    export ROBOT_ENV=world1
+    
+Then by running following code, you can start-up the robot in gazebo.
+
+    roslaunch rto_bringup_sim robot.launch
+    
+Afterwards, the `navigation_navpy.launch` file includes all other nodes for the robot to be able to localization, planning and moving. 
+
+    roslaunch rto_navigation navigation_navpy.launch
 
 
 
