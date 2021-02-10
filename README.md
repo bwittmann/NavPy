@@ -24,7 +24,16 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 
 ## Structure/Overview
 In the following, all packages within this repository are briefly explained.
-Core Repository
+
+
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 300px;"> <img src="resources/images/rosgraph.png" width='300'></td>
+  </tr>
+  <tr>
+    <td style="width: 300px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
+  </tr>
+</table>
 
 ### Core Repository
 
@@ -52,7 +61,7 @@ This repository contains everything needed for using the RTO in a simulated envi
 - [rto_bringup_sim](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_bringup_sim)
 - [rto_simulation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_simulation)
 
-##### [rto_core](https://github.com/dietriro/rto_core#robotino-core)
+#### [rto_core](https://github.com/dietriro/rto_core#robotino-core)
 This repository contains everything needed to start-up the RTO in a simulated environment or the real-world, including localization and navigation. 
 - [rto_bringup](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_bringup) 
 - [rto_core](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_core)
