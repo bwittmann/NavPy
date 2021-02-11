@@ -1,4 +1,0 @@
-<launch>
-    <param name="robot_description" command="cat $(find rto_description)/urdf/rto_platform_kinect.urdf"/>
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find rto_navigation)/config/rto.rviz"/>
-</launch>
