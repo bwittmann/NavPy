@@ -12,7 +12,6 @@ from math import cos, sin, pi, inf, exp, sqrt
 from threading import Lock
 import random
 import numpy as np
-
 from rto_map_server.srv import GetMap
 
 class Particle(object):
@@ -92,9 +91,13 @@ class ParticleFilter(object):
         """
         Public method: Transforms positions in the Occupancy Grid Map which is 0,0 in bottom left corner to coordinates to /map coordinate frame
 
-        @param x_ogm: x position in Occupancy Grid Map 
-        @param y_ogm: y position in Occupancy Grid Map
+        @param x_ogm: continous x position in Occupancy Grid Map 
+        @param y_ogm: continous y position in Occupancy Grid Map
         @param yaw_ogm: yaw in Occupancy Grid Map
+
+        @return x: x position in map frame
+        @return y: y position in map frame
+        @return yaw: yaw position in map frame
         """
 
         x = x_ogm + self.ogm.map.info.origin.position.x
@@ -108,8 +111,11 @@ class ParticleFilter(object):
         """
         Private Method: Transforms x, y postions in Occupancy Grid Map in continous x, y values
 
-        @param x_grid: x position in Occupancy Grid Map 
-        @param y_grid: y position in Occupancy Grid Map
+        @param x_grid: x position of cell in Occupancy Grid Map 
+        @param y_grid: y position of cell in Occupancy Grid Map
+
+        @return x_continous: continous x position in Occupancy Grid Map 
+        @return y_continous: continous y position in Occupancy Grid Map
         """
 
         x_continous = x_grid*self.resolution
@@ -120,8 +126,11 @@ class ParticleFilter(object):
         """
         Private Method: Transforms continous x, y values to x, y postions in Occupancy Grid Map 
 
-        @param x_grid: x position in Occupancy Grid Map 
-        @param y_grid: y position in Occupancy Grid Map
+        @param x_grid: continous x position in Occupancy Grid Map 
+        @param y_grid: continous y position in Occupancy Grid Map
+
+        @return x_grid: x position of cell in Occupancy Grid Map 
+        @return y_grid: y position of cell in Occupancy Grid Map
         """
 
         grid_x_in_xrange = int(round(x_continous/self.resolution))
@@ -131,6 +140,10 @@ class ParticleFilter(object):
     def _find_lost_robot(self):
         """
         Privat Method: Samples continous x,y, yaw positions randomly in the free space in order to find lost robot
+
+        @return x: x of estimated robot pose
+        @return y: y of estimated robot pose
+        @return yaw: yaw of estimated robot pose
         """
 
         while True:
@@ -149,6 +162,10 @@ class ParticleFilter(object):
     def _get_random_free_space(self):
         """
         Private Method: Samples continous x,y, yaw positions in the free space close to the init position of robot
+        
+        @return x: x of estimated robot pose
+        @return y: y of estimated robot pose
+        @return yaw: yaw of estimated robot pose
         """
 
         while True:
@@ -184,9 +201,14 @@ class ParticleFilter(object):
 
     def handle_observation(self, laser_scan_msg): #time = 0.6
         """
-        Public Method: Predicts and updates the particles
+        Public Method:  - Predicts and updates the particles
+                        - caclulates the averag error of all particles and determines whether Monte Carlo localization or odometry is used to estimate
+                          the pose of the robot
+                        - in the case the Monte Carlo localization is not accurate the uncertainty for predicting the particles is increased
 
         @param laser_scan_message: laser scan message which is used for update of particles
+
+        @return: bool value which determines whether the localization is accurate
         """
 
         weights_not_normalized = np.zeros((self.num_particles))
@@ -212,17 +234,14 @@ class ParticleFilter(object):
         #resample
         self._resample()
 
-        rospy.loginfo(error_sum/self.num_particles)
-        #if num_right > self.num_particles*self.localization_error_percentage:
         if error_sum/self.num_particles < self.normalized_commulated_localization_error:
-            rospy.loginfo("LOCAL")
             self.adapt_std_for_bad_localization = 1
-            return True
+            localization_is_accurate = True
         else:
-            rospy.loginfo("ODOM")
             self.adapt_std_for_bad_localization = self.adapt_std_for_bad_localization
-            #self.adapt_std_for_bad_localization = error_sum/5
-            return False
+            localization_is_accurate = False
+        
+        return localization_is_accurate
 
     def _resample(self): #time = 0.0003
         """
@@ -258,6 +277,8 @@ class ParticleFilter(object):
 
         @params x: Vector containing x positions of the relevant cells
         @params y: Vector containing y positions of the relevant cells
+
+        @return result: Vector containing either the value of the x,y cells in the map or 200 if the cell is not in the map
         """
         
         cells = np.array([x,y]).T
@@ -279,9 +300,11 @@ class ParticleFilter(object):
                         - Sense in the directions of subsampled angles
                         - Sense in the range of minimal to maximal distance of laser in steps of map resolution
         
-        @ param x: x position of particle
-        @ param y: y position of particle
-        @ param yaw: yaw orientation of partcile
+        @param x: x position of particle
+        @param y: y position of particle
+        @param yaw: yaw orientation of partcile
+
+        @return particle_ranges: vector containing the ranges for the subsampled laser scans which the robot would sense if it was in pose of particle
         """
 
         # calculate vectors containing all sin, cos values and distances to calculate relevant cells around particle
@@ -336,7 +359,9 @@ class ParticleFilter(object):
                         - angles are defined by subsampled_angles and eval_beams
                         - replace value inf of laser scanner with max range of laser scanner
         
-        @ params laser_scan_msg: laser scan message which will be subsampled
+        @params laser_scan_msg: laser scan message which will be subsampled
+
+        @return subsampled_ranges: vector containing the ranges for the subsampled laser scans of the robot
         """
 
         subsampled_ranges = []
@@ -359,6 +384,8 @@ class ParticleFilter(object):
         @params laser_scan_msg: laser scan message from robot which is compared with the simulated laser scan of particle (laser scan of robot if it 
                                 has same pose as particle)
         @params particle: particle for which the error is caclulated
+
+        @return error: linear least squared error calculated from difference between subsampled laser scans of robot and particle
         """
 
         # high error for particles outside of ogm or within an obstacle
@@ -410,6 +437,10 @@ class ParticleFilter(object):
         Private Method: Predict particle according to odometry and incorperate uncertainty
 
         @params particle: particle which will be predicted
+
+        @return x_new: continous x coordinate of new predicted pose of particle
+        @return y_new: continous y coordinate of new predicted pose of particle
+        @return yaw_new: continous yaw coordinate of new predicted pose of particle
         """
 
         # Incorperate uncertainty to prediction. Adapt uncertainty to relative motion to not let relative motion dominate prediction
@@ -434,6 +465,10 @@ class ParticleFilter(object):
         Public Method:  - Estimated pose of MCL localization as weighted average of all particles
                         - Particles are updated such that the laser scan error is samll. Therefore particles are in position of hokuyo laser scaner
                         - Estimated pose of MCL localization must therfore be transformed from /hokuyo_link to /base_link
+
+        @return x: continous x coordinate of estimated pose of robot in map frame
+        @return y: continous y coordinate of estimated pose of robot in map frame
+        @return yaw: continous yaw coordinate of estimated pose of robot in map frame
         """
         
         # weighted average
@@ -444,7 +479,7 @@ class ParticleFilter(object):
             y_in += self.weights[i] * y
             yaw_in += self.weights[i] * yaw
         
-        # TF Transform from /hokuyo_link to /base_link
+        # Transform from /hokuyo_link to /base_link
         x = x_in-0.08*cos(yaw_in)
         y = y_in-0.08*sin(yaw_in)
         yaw = yaw_in
