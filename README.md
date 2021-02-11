@@ -8,7 +8,7 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
     <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="800"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> NavPy in action.
+    <td style="width: 48%;" valign="top"> <b>Gif.1:</b> NavPy in action.
     </td>
   </tr>
 </table>
@@ -21,7 +21,7 @@ In the following, all packages within this repository are briefly explained.
     <td style="width: 1000px;"> <img src="resources/images/rosgraph.png" width='800'></td>
   </tr>
   <tr>
-    <td style="width: 1000px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
+    <td style="width: 1000px;" valign="top"> <b>Fig.1:</b> rqt_graph of NavPy.
   </tr>
 </table>
 
@@ -78,11 +78,11 @@ In order to allow the use of a point representation of the mobile robot for path
     <td style="width: 48%;"> <img src="resources/images/map_linear1.png" width='300'></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> 'Exponential' soft padding (0.2 m).
+    <td style="width: 48%;" valign="top"> <b>Fig.2:</b> 'Exponential' soft padding (0.2 m).
     </td>
-    <td style="width: 48%;" valign="top">  <b>Fig.x:</b> 'Exponential' soft padding (1.0 m).
+    <td style="width: 48%;" valign="top">  <b>Fig.3:</b> 'Exponential' soft padding (1.0 m).
     </td>
-    <td style="width: 48%;" valign="top">  <b>Fig.x:</b> 'Linear' soft padding (1.0 m).
+    <td style="width: 48%;" valign="top">  <b>Fig.4:</b> 'Linear' soft padding (1.0 m).
     </td>
   </tr>
 </table>
@@ -95,7 +95,7 @@ In a real world scenario it is not enough to make decisions based on a static gl
     <td style="width: 300px;"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
   <tr>
-    <td style="width: 300px;" valign="top"> <b>Fig.x:</b> Local costmap (green) detects a new obstacle.
+    <td style="width: 300px;" valign="top"> <b>Fig.5:</b> Local costmap (green) detects a new obstacle.
   </tr>
 </table>
 
@@ -186,9 +186,9 @@ The overall cost for a control pair is 0 if the robot travels with its maximal l
     <td style="width: 48%;"> <img src="resources/gifs/path_following.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on avoiding obstacles (gain values: 18 12 15 15).
+    <td style="width: 48%;" valign="top"> <b>Gif.2:</b> Local planner focuses on avoiding obstacles (gain values: 18 12 15 15).
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on staying on the global path (gain values: 28 2 80 1).
+    <td style="width: 48%;" valign="top"> <b>Gif.3:</b> Local planner focuses on staying on the global path (gain values: 28 2 80 1).
     </td>
   </tr>
 </table>
@@ -211,11 +211,11 @@ Based on the values of the related parameters a recovery behaviour will be carri
     <td style="width: 33%;"> <img src="resources/gifs/recovery6.gif" width="300"/></td>
   </tr>
   <tr>
-    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a small linear velocity.
+    <td style="width: 33%;" valign="top"> <b>Gif.4:</b> Initializing a recovery behaviour based on a small linear velocity.
     </td>
-    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on circling.
+    <td style="width: 33%;" valign="top"> <b>Gif.5:</b> Initializing a recovery behaviour based on circling.
     </td>
-    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on path execution time.
+    <td style="width: 33%;" valign="top"> <b>Gif.6:</b> Initializing a recovery behaviour based on path execution time.
     </td>
   </tr>
 </table>
@@ -274,9 +274,9 @@ This package contains the rto_localization node, which is responsible for locali
     <td style="width: 48%;"> <img src="resources/gifs/localization_replan.gif " width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Pass dynamic obstacle solely by using local planer.
+    <td style="width: 48%;" valign="top"> <b>Gif.7:</b> Pass dynamic obstacle solely by using local planer.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Update map of localization and recalculate the path.
+    <td style="width: 48%;" valign="top"> <b>Gif.8:</b> Update map of localization and recalculate the path.
     </td>
     </td>
   </tr>
@@ -288,7 +288,7 @@ If the localization is not accurate for several iterations it might happen, that
     <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
+    <td style="width: 48%;" valign="top"> <b>Gif.9:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
     </td>
   </tr>
 </table>
@@ -340,11 +340,11 @@ The global planner is based on bidirectional A-Star algorithm. At the beginning,
     <td style="width: 48%;"> <img src="resources/images/global_path_3.png" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> Original path generated by bi-directional a_star.
+    <td style="width: 48%;" valign="top"> <b>Fig.5:</b> Original path generated by bi-directional a_star.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> Path after doing path smoothing.
+    <td style="width: 48%;" valign="top"> <b>Fig.6:</b> Path after doing path smoothing.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> Dense path for local planner.
+    <td style="width: 48%;" valign="top"> <b>Fig.7:</b> Dense path for local planner.
     </td>
   </tr>
 </table>
