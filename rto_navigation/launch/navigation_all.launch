@@ -20,7 +20,6 @@
     </node>
 
     <!-- Run global planner -->
-    <!-- <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner.py" output="screen"/> -->
     <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
 
     <!-- Run local planner -->

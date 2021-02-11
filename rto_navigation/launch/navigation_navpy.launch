@@ -1,7 +1,10 @@
 <launch>
-    <arg name="robot_env" default="$(optenv ROBOT_ENV sim_simple)"/>
+    <arg name="robot_env" default="$(optenv ROBOT_ENV world1)"/>
     <arg name="safety" default="true"/>
     <arg name="map_file" value="$(find rto_map_server)/maps/$(arg robot_env).yaml" />
+
+    <!-- Run rviz -->
+    <include file="$(find rto_bringup)/launch/rviz.launch" />
 
     <!-- Run map server -->
     <include file="$(find rto_map_server)/launch/map_server.launch"/>

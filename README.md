@@ -10,7 +10,7 @@
 # NavPy
 
 ## Introduction
-A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ros navigation stack](http://wiki.ros.org/navigation). The prerequisites which are mentioned in the ros-navigation stack are also relevant for the NavPy navigation stack. The allgorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
+A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ros navigation stack](http://wiki.ros.org/navigation). The prerequisites which are mentioned in the ros-navigation stack are also relevant for the NavPy navigation stack. The algorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
@@ -25,6 +25,15 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 ## Structure/Overview
 In the following, all packages within this repository are briefly explained.
 
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 1000px;"> <img src="resources/images/rosgraph.png" width='1000'></td>
+  </tr>
+  <tr>
+    <td style="width: 1000px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
+  </tr>
+</table>
+
 ### Core Repository
 
 #### [rto_costmap_generator](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_costmap_generator)
@@ -38,7 +47,7 @@ Localizes the robot in the map.
 #### [rto_global_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_global_planner)
 Plans a path between the robot pose and an arbitrary valid goal.
 #### [rto_navigation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_navigation)
-Contains launch and configuration files for starting the robots navigation.
+Contains launch and configuration files for starting the robot's navigation.
 #### [rto_worlds](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_worlds)
 Contains world models etc. for bringing up a simulation environment (e.g. gazebo).
 
@@ -51,7 +60,7 @@ This repository contains everything needed for using the RTO in a simulated envi
 - [rto_bringup_sim](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_bringup_sim)
 - [rto_simulation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_simulation)
 
-##### [rto_core](https://github.com/dietriro/rto_core#robotino-core)
+#### [rto_core](https://github.com/dietriro/rto_core#robotino-core)
 This repository contains everything needed to start-up the RTO in a simulated environment or the real-world, including localization and navigation. 
 - [rto_bringup](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_bringup) 
 - [rto_core](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_core)
@@ -90,7 +99,7 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognised by the system, the accuracy of the loclization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laserscan range measurements. The figure bellow depicts the local costmap and an obstacle that is currently not part of the global costmap. 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 200%">
   <tr>
     <td style="width: 300px;"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
@@ -265,8 +274,7 @@ To initialize a replanning of the global path after new obstacles have been adde
 
 ### rto_localization
 #### Description
-This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used.<br>
-The navigation is stack is able to work in a dynamic environment. Obstacles which are not part of the map will reduce the accuracy of the Monte Carlo localization. Therefore the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. After each iteration this error is calculated and decides whether the pose of the robot is measured by the Monte Carlo localization or odometry. If the error is smaller than a given threshold the estimated pose of the Monte Carlo localization is used. Otherwise, the estimated pose from the last iteration is updated according to the relative motion between these two iterations. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. The localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer in gif ... or by recalculating a new path in gif ... .
+This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used. The navigation stack is able to work in a dynamic environment. Obstacles which are not included in the map will reduce the accuracy of the Monte Carlo localization drastically. Therefore, the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. This performance measurement is used to decide whether the pose of the robot is estimated by the Monte Carlo localization or the odometry. The Monte Carlo Localization is used if the error is smaller than a given threshold. Otherwise, the estimated pose from the last iteration is updated according to the relative motion since then. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. In Gif ... the localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer. In this example the obstacle is not included in the map. In Gif ... the global path is recalculated by the global planer and the map is updated by the rto_costmap_generator. As soon as the obstacle is included in the map the particles of the Monte Carlo Localization estimate the pose of the robot much better. Before the update the localization relies on the odometry.
 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
@@ -283,7 +291,7 @@ The navigation is stack is able to work in a dynamic environment. Obstacles whic
   </tr>
 </table>
 
-If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out and are able to catch the position of the robot again. This can be seen in gif ... . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
+If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in Gif ... . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
@@ -301,7 +309,7 @@ Laser scan of the robot to update the particles.
 ##### `/odom`
 Motion of the robot estimated by odometry to predict particles.
 ##### `/global_costmap`
-Update dynamic obstacles in the map used by the localization.
+Update dynamic obstacles in the map.
 #### Published Topics
 ##### `/particles`
 Visualization of all particles in RVIZ as red arrows.
@@ -310,34 +318,23 @@ Visualization of the estimated pose of the localization in RVIZ as green arrow.
 ##### `/pose`
 Estimated pose of the localization.
 #### Services
-##### `/get_map`
-Service that loads map of the static world.<br>
-request: map_nr [int64]<br>
-response: map [nav_msgs/OccupancyGrid]
+None
 #### Configuration
-`dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a gaussian noise with this translation uncertainty.<br>
+`dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a gaussian noise with this standard deviation.<br>
 <br>
-`dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this orientation uncertainty.<br>
+`dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this standard deviation.<br>
 <br>
-`num_particles`: Number of particles used in the Monte Carlo Localization. An increased number of particles would increase the performance of the algorithm. Due to computational cost this is a limiting factor and depends on the machine which is used to run the navigation algorithm.<br>
+`num_particles`: Number of particles used in the Monte Carlo Localization.<br>
 <br>
-`num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the laser scanner of the robot.<br>
+`num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the robot's laser scanner <br>
 <br>
 `update_rate`: This defines the prediction and update rate of the Monte Carlo Localization.<br>
 <br>
-`launch_style`: The particles of the localization can be initialized randomly in the map or 
-close to the position where the robot is spawned. When the particles are initialized randomly at least 400 particles are necessary.<br>
+`launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned.<br>
 <br>
-`normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot pose.<br>
+`normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
 <br>
-`variance_increase_for_bad_localization`:Defines how much the translation and orientation uncertainty is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot.<br>
-
-### rto_navigation
-#### Description
-
-
-### rto_worlds
-#### Description
+`variance_increase_for_bad_localization`:Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
 
 ### rto_global_planner
 #### Description
@@ -375,17 +372,33 @@ To receive the arranged point in map as the end point.
 To publish the generated path message as a feasible path from current location to goal.
 ##### `/visualization/plan`
 To publish a visualized plan in rviz.
-#### Services
-##### `/clear_map`
-Service that resets the global costmap to its original state in case there is no path find from start point to end point at the first time, to avoid the situation that there is a path but a temporary obstacle makes it impossible to be found.
-All additionally added obstacles will be deleted.<br>
-request: command [string] ('clear')<br>
-response: success [bool]
 
 
-## Install and how to run
+## Installation
+In order to use the robot you first have to install Ubuntu Focal (20.04) as well as ROS Noetic, which currently is the only supported ROS version of this repository. Besides, you will need to install necessary dependencies of robotino robot. For details in installing of Ros Noetic as well as all necessary dependencies, please refer to [rto_core](https://github.com/dietriro/rto_core).
 
+Afterwards you have to clone this repository to your catkin space and build it.
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/KathiWinter/rto_Robot_Navigation.git
+cd ~/catkin_ws
+rosdep install -y --from-paths src --ignore-src --rosdistro noetic --os=ubuntu:focal
+catkin build
+```
 
+## Usage
+To use this robot in simulation world, you will have to specify robot and enviornment first.
+
+    export ROBOT=rto-1
+    export ROBOT_ENV=world1
+    
+Then by running following code, you can start-up the robot in gazebo.
+
+    roslaunch rto_bringup_sim robot.launch
+    
+Afterwards, the `navigation_navpy.launch` file includes all other nodes for the robot to be able to localization, planning and moving. 
+
+    roslaunch rto_navigation navigation_navpy.launch
 
 
 
