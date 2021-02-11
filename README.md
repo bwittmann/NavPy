@@ -331,7 +331,7 @@ None
 #### Description
 This package contains the global_planner_node, which creates a global path that can be used by local_planner.
 
-The global planner is based on bidirectional A-Star algorithm. At the beginning, we start search both from current position and goal position. After each iteration, check whether there is an intersection between open list from start point and  goal point. If there is an intersection, then connect the path from start point and end point. In this case, the path might look like very strange, then we do path smoothing to avoid unnecessary turns. At last, to make sure local_planner will get a dense path which is represented by nodes next to each other, path argumentation is applied.
+The global planner is based on bidirectional A-Star algorithm. At the beginning, we start search both from current position and goal position. After each iteration, check whether there is an intersection between open list from start point and  goal point. If there is an intersection, then connect the path from start point and end point. In this case, the path might look like very strange(see Fig.10), then we do path smoothing to avoid unnecessary turns(see Fig.11). At last, to make sure local_planner will get a dense path which is represented by nodes next to each other, path argumentation is applied(see Gif.10).
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
@@ -349,7 +349,7 @@ The global planner is based on bidirectional A-Star algorithm. At the beginning,
   </tr>
 </table>
 
-If there is no path from start point to goal point found at the first time, the global_planner will call service `/clear_map`. Then plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles, and this makes it impossible to find a path from start to goal. After a while, the obstacle disappeared, which makes us capable to find a path. So we call service `/clear_map` to make sure if it is solvable without temporary obstacles.
+In some cases, there might be no path from start to end. To make sure reliability of the no path situation, the global_planner will call service `/clear_map`, if there is no path from start point to goal point found at the first time. Then global planner will try to plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles(which is not there anymore), and this makes it impossible to find a path from start to goal. So we call service `/clear_map` to make sure if it is solvable without temporary obstacles(see Gif.10).
 
 #### Subscribed Topics
 ##### `/global_costmap`
@@ -373,7 +373,6 @@ Afterwards you have to clone this repository to your catkin space and build it.
 cd ~/catkin_ws/src
 git clone https://github.com/KathiWinter/rto_Robot_Navigation.git
 cd ~/catkin_ws
-rosdep install -y --from-paths src --ignore-src --rosdistro noetic --os=ubuntu:focal
 catkin build
 ```
 
