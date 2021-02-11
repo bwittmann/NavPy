@@ -30,7 +30,7 @@ class Particle(object):
 
 class ParticleFilter(object):
     def __init__(self, num_particles, occ_grid_map, eval_beams, dynamics_translation_noise_std_dev, 
-                dynamics_orientation_noise_std_dev, odom_noise, normalized_commulated_localization_error, 
+                dynamics_orientation_noise_std_dev, odom_noise, normalized_comulated_localization_error, 
                 variance_increase_for_bad_localization):
         """
         INIT of ParticleFilter class
@@ -41,7 +41,7 @@ class ParticleFilter(object):
         @param dynamics_translation_noise_std_dev: Variance used for the prediction of the particles in x, y
         @param dynamics_orientation_noise_std_dev: Variance used for the prediction of the particles yaw
         @param odom_noise: Bool value which defines whether noise should be incorperated in odometry
-        @param normalized_commulated_localization_error: normalized commulated error is treshhold which defines whether odometry or localization 
+        @param normalized_comulated_localization_error: normalized comulated error is treshhold which defines whether odometry or localization 
                                                           is used for the robot position
         @param variance_increase_for_bad_localization: Variance which defines the uncertainty when predicting particles is increased by this percentage,
                                                         when odometry is used becuase localization is not accurate enough
@@ -51,7 +51,7 @@ class ParticleFilter(object):
         self.num_particles = num_particles
         self.eval_beams = eval_beams
         self.odom_noise = odom_noise
-        self.normalized_commulated_localization_error = normalized_commulated_localization_error
+        self.normalized_comulated_localization_error = normalized_comulated_localization_error
         self.variance_increase_for_bad_localization = variance_increase_for_bad_localization
 
         self.particles = np.empty(self.num_particles, dtype=Particle)
@@ -221,7 +221,7 @@ class ParticleFilter(object):
             weights_not_normalized[i] = exp(-error)
             error_sum += error
 
-        #commulated relative motion between 2 consecutive prediction set to 0
+        #comulated relative motion between 2 consecutive prediction set to 0
         self.dx = 0
         self.dy = 0
         self.dyaw = 0
@@ -233,7 +233,7 @@ class ParticleFilter(object):
         #resample
         self._resample()
 
-        if error_sum/self.num_particles < self.normalized_commulated_localization_error:
+        if error_sum/self.num_particles < self.normalized_comulated_localization_error:
             self.adapt_std_for_bad_localization = 1
             localization_is_accurate = True
         else:
@@ -426,7 +426,7 @@ class ParticleFilter(object):
             diff_position += random.gauss(0, 0.4)*diff_position
     
 
-        #add relative motion to commulated relativ motion which is used in next prediction
+        #add relative motion to comulated relativ motion which is used in next prediction
         self.dx = diff_position[0]
         self.dy = diff_position[1]
         self.dyaw = yaw_diff
@@ -519,12 +519,12 @@ class MonteCarloLocalization(object):
         self.update_rate = int(20/update_rate_iteration)
         odom_noise = rospy.get_param("~odom_noise")
         launch_style = rospy.get_param("~launch_style")
-        normalized_commulated_localization_error = rospy.get_param("~normalized_commulated_localization_error")
+        normalized_comulated_localization_error = rospy.get_param("~normalized_comulated_localization_error")
         variance_increase_for_bad_localization = rospy.get_param("~variance_increase_for_bad_localization")
 
         # Init ParticleFilter
         self.pf = ParticleFilter(num_particles, self.ogm, self.eval_beams, dynamics_translation_noise_std_dev, dynamics_orientation_noise_std_dev,
-                                odom_noise, normalized_commulated_localization_error, variance_increase_for_bad_localization)
+                                odom_noise, normalized_comulated_localization_error, variance_increase_for_bad_localization)
 
         # Initialize particles of Particle Filter
         self.pf.init_particles(type=launch_style)
