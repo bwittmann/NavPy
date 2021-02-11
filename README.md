@@ -90,7 +90,7 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognized by the system, the accuracy of the localization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laser scan range measurements. The figure bellow depicts the local costmap and an obstacle that is currently not part of the global costmap. 
 
-<table style="margin-left: 250px; margin-right: auto; table-layout: fixed; width: 200%">
+<table class="center" style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 200%">
   <tr>
     <td style="width: 300px;"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
@@ -206,16 +206,16 @@ Based on the values of the related parameters a recovery behaviour will be carri
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery1.gif" width="250"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery5.gif" width="300"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery6.gif" width="250"/></td>
+    <td style="width: 33%;"> <img src="resources/gifs/recovery1.gif" width="300"/></td>
+    <td style="width: 33%;"> <img src="resources/gifs/recovery5.gif" width="300"/></td>
+    <td style="width: 33%;"> <img src="resources/gifs/recovery6.gif" width="300"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a small linear velocity.
+    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a small linear velocity.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on circling.
+    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on circling.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on path execution time.
+    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on path execution time.
     </td>
   </tr>
 </table>
