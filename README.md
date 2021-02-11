@@ -323,7 +323,7 @@ None
 <br>
 `launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned.<br>
 <br>
-`normalized_commulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
+`normalized_comulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
 <br>
 `variance_increase_for_bad_localization`:Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
 
