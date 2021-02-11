@@ -356,7 +356,8 @@ In some cases, there might be no path from start to end. To make sure reliabilit
     <td style="width: 48%;"> <img src="resources/gifs/disappear_obstacle.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.10:</b> Obstacle added to costmap disappeared
+    <td style="width: 48%;" valign="top"> <b>Gif.10:</b> 
+      Path cannot be found due to disappeared temporary obstacle, call clear map and replan
     </td>
   </tr>
 </table>
