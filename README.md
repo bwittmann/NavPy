@@ -351,6 +351,16 @@ The global planner is based on bidirectional A-Star algorithm. At the beginning,
 
 In some cases, there might be no path from start to end. To make sure reliability of the no path situation, the global_planner will call service `/clear_map`, if there is no path from start point to goal point found at the first time. Then global planner will try to plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles(which is not there anymore), and this makes it impossible to find a path from start to goal. So we call service `/clear_map` to make sure if it is solvable without temporary obstacles(see Gif.10).
 
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 48%;"> <img src="resources/gifs/disappear_obstacle.gif" width="350"/></td>
+  </tr>
+  <tr>
+    <td style="width: 48%;" valign="top"> <b>Gif.10:</b> Obstacle added to costmap disappeared
+    </td>
+  </tr>
+</table>
+
 #### Subscribed Topics
 ##### `/global_costmap`
 To receive the padded costmap used to plan a feasible path.
