@@ -14,30 +14,29 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="500"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="750"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> NavPy
+    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> NavPy in action.
     </td>
   </tr>
 </table>
 
 ## Structure/Overview
 In the following, all packages within this repository are briefly explained.
-Core Repository
 
 ### Core Repository
 
 #### [rto_costmap_generator](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_costmap_generator)
 Generates the local and the global costmap.
 #### [rto_map_server](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_map_server)
-Transforms a pgm file to a OccupancyGrid message
+Transforms a pgm file to a OccupancyGrid message.
 #### [rto_local_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_local_planner)
-Creates a local path and allows the robot to follow the global path
+Creates a local path and allows the robot to follow the global path.
 #### [rto_localization](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_localization)
-Localizes the robot in the map
+Localizes the robot in the map.
 #### [rto_global_planer](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_global_planner)
-Plans a path between the robot pose and an arbitrary valid goal
+Plans a path between the robot pose and an arbitrary valid goal.
 #### [rto_navigation](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_navigation)
 Contains launch and configuration files for starting the robots navigation.
 #### [rto_worlds](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_worlds)
@@ -63,10 +62,8 @@ This repository contains everything needed to start-up the RTO in a simulated en
 - [rto_teleop](https://github.com/KathiWinter/rto_Robot_Navigation/tree/main/rto_teleop)
 
 
-
-
 ## Packages
-In the following, all packages within this repository are briefly explained
+In the following, all packages within this repository are briefly explained.
 
 ### rto_costmap_generator
 #### Description
@@ -91,7 +88,7 @@ In order to allow the use of a point representation of the mobile robot for path
 </table>
 
 
-In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognised by the system, the accuracy of the loclization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laserscan range measurements. The figure bellow depicts the local costmap and a obstacle that is currently not part of the global costmap. 
+In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognised by the system, the accuracy of the loclization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laserscan range measurements. The figure bellow depicts the local costmap and an obstacle that is currently not part of the global costmap. 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
@@ -104,7 +101,7 @@ In a real world scenario it is not enough to make decisions based on a static gl
 
 #### Subscribed Topics
 ##### `/scan`
-To receive the LaserScan messages from the hokuyo laser scanner.
+To receive the LaserScan messages from the hokuyo laser scanner which is necessary for detecting local obstacles.
 ##### `/odom`
 To receive the Odometry messages from the odometry system.
 #### Published Topics
@@ -199,20 +196,19 @@ The overall cost for a control pair is 0 if the robot travels with its maximal l
 Of course both strategies have advantages and disadvantages and it depends on the situation which version to use.
 Please be aware of the fact that the parameters are tuned for the robot to work in the gazebo simulation environment. Applying the local planner to real world conditions might require additional parameter tuning.
 
-The local planner node not only estimates the best control values, but also initialize a so called recovery behaviour that adds the local costmap to the global costmap via the service 'add_local_costmap' and publishes the current goal position again to initiate a replanning of the global path. This is necessary in order to allow the system to react to changes in the world it operates in. Therefore, the local planner needs a couple of measures to decide if a recovery behaviour is necessary. The implemented measures are listed below:
+The local planner node not only estimates the best control values, but also initialize a so called recovery behaviour that adds the local costmap to the global costmap via the service 'add_local_costmap' and publishes the current goal position again to initiate a replanning of the global path. This is necessary in order to allow the system to react to changes of the world it operates in. Therefore, the local planner needs a couple of measures to decide if a recovery behaviour is necessary. The implemented measures are listed below:
 
 - small linear velocity
 - circling
 - execution time of the current path
 
-Based on the values of the related parameters a recovery behaviour will be carried out when the linear velocity is below a certain threashold for a certain amount of time. This can often be traced back to a global path blocked by an obstacle which is currently not included in the global costmap. This particular case can also lead to the robot circling infront of the obstacle. For this reason, a recovery behaviour is also initialized when the sign of the robots angular velocity does not change for a specific time period. The last measure for initializing a recovery behaviour is the execution time of the current path. If the robot takes longer than expected to reach the goal position, this might also indicate that a recovery behaviour makes sense in this situation. The gifs below demonstrate the typical scenarious that lead to a initialization and execution of a recovery behaviour.
-
+Based on the values of the related parameters a recovery behaviour will be carried out when the linear velocity is below a certain threashold for a certain amount of time. This can often be traced back to a global path blocked by an obstacle that is currently not included in the global costmap. This particular case can also lead to the robot circling infront of the obstacle. For this reason, a recovery behaviour is also initialized when the sign of the robots angular velocity does not change for a specific time period. The last measure for initializing a recovery behaviour is the execution time of the current path. If the robot takes longer than expected to reach the goal position, this might also indicate that a recovery behaviour makes sense in this situation. The gifs below demonstrate the typical scenarious that lead to a initialization and execution of a recovery behaviour.
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery1.gif" width="350"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery5.gif" width="350"/></td>
-    <td style="width: 48%;"> <img src="resources/gifs/recovery6.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery1.gif" width="300"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery5.gif" width="300"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/recovery6.gif" width="300"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a small linear velocity.
@@ -223,6 +219,49 @@ Based on the values of the related parameters a recovery behaviour will be carri
     </td>
   </tr>
 </table>
+
+#### Subscribed Topics
+##### `/odom`
+To receive the current position in the odomerty frame.
+##### `/global_path`
+To calculate the distance of the robot to the global path and to estimate the angle to the goal.
+##### `/local_obstacles`
+To estimate the minimal distances of possible trajectories to the currently sensed obstacles. 
+#### Published Topics
+##### `/cmd_vel`
+To publish the best control pair in order to let the robot move as desired.
+##### `/visualization/local_path`
+To publish a line strip marker that can be visualized in rviz.
+##### `goal`
+To initialize a replanning of the global path after new obstacles have been added to the costmap.
+#### Configuration
+`log_times`: Log execution times of critical operations.<br>
+`debug_mode`: Return debugging messages to the terminal.<br>
+`show_path`: Show a representation of the local path in rviz.<br>
+`lookahead`: Time span (dt) used for the motion update and the estimation of the dynamic window.<br>
+`robot_diameter`: Diameter of the robot used to determine if a trajectory could result in a crash.<br>
+`safety_distance`: Distance that is additionally used with the robot diameter to estimate valid trajectories.<br>
+`min_linear_vel`: Minimum linear velocity of the robot.<br>
+`max_linear_vel`: Maximum linear velocity of the robot.<br>
+`min_angular_vel`: Minimum angular velocity of the robot.<br>
+`max_angular_vel`: Maximum angular velocity of the robot.<br>
+`max_acc`: Maximum acceleration of the robot.<br>
+`max_dec`: Maximum deceleration.<br>
+`res_ang_vel_space`: Resolution of the angular velocity in the dynamic window.<br>
+`res_lin_vel_space`: Resolution of the linear velocity in the dynamic window.<br>
+`gain_vel`: Gain factor of the cost based on linear velocity.<br>
+`gain_goal_angle`: Gain factor of the cost based on the angle towards the goal.<br>
+`gain_glob_path`: Gain factor of the cost based on the proximity to the global path.<br>
+`gain_clearance`: Gain factor of the cost based on the proximity to obstacles.<br>
+`rec_min_lin_vel`: Velocity threashold for a recovery based on small linear velocities.<br>
+`rec_min_lin_vel_time`: Time period in which the velocity has to be under the threashold.<br>
+`rec_circling_time`: Time period for circling after which the recovery behaviour gets initialized.<br>
+`rec_path_time_factor`: Factor that decides when to initialize a recovery behaviour based on overall path execution time.<br>
+`rec_path_len`: Minimal length of a global path to be considered for a recovery behaviour based on overall path execution time.<br>
+`min_dist_goal`: Distance to goal that is considered enough to declare that the goal has been reached.<br>
+
+
+
 
 ### rto_localization
 #### Description
@@ -258,18 +297,18 @@ If the localization is not accurate for several iterations it might happen, that
 
 #### Subscribed Topics
 ##### `/scan`
-Laser scan of the robot to update the particles
+Laser scan of the robot to update the particles.
 ##### `/odom`
-Motion of the robot estimated by odometry to predict particles
+Motion of the robot estimated by odometry to predict particles.
 ##### `/global_costmap`
-Update dynamic obstacles in the map used by the localization
+Update dynamic obstacles in the map used by the localization.
 #### Published Topics
 ##### `/particles`
-Visualization of all particles in RVIZ as red arrows
+Visualization of all particles in RVIZ as red arrows.
 ##### `/particle`
-Visualization of the estimated pose of the localization in RVIZ as green arrow
+Visualization of the estimated pose of the localization in RVIZ as green arrow.
 ##### `/pose`
-Estimated pose of the localization
+Estimated pose of the localization.
 #### Services
 ##### `/get_map`
 Service that loads map of the static world.<br>
@@ -291,7 +330,7 @@ close to the position where the robot is spawned. When the particles are initial
 <br>
 `normalized_commulated_localization_error`: Treshhold which defines whether the localization or the odometry is used to estimate the robot pose.<br>
 <br>
-`variance_increase_for_bad_localization`:Defines how much the translation and orientation uncertainty is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
+`variance_increase_for_bad_localization`:Defines how much the translation and orientation uncertainty is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot.<br>
 
 ### rto_navigation
 #### Description
@@ -326,16 +365,16 @@ If there is no path from start point to goal point found at the first time, the 
 
 #### Subscribed Topics
 ##### `/global_costmap`
-To receive the padded costmap used to plan a feasible path
+To receive the padded costmap used to plan a feasible path.
 ##### `/odom`
-To receive the current position of robot as the start point
+To receive the current position of robot as the start point.
 ##### `/goal`
-To receive the arranged point in map as the end point
+To receive the arranged point in map as the end point.
 #### Published Topics
 ##### `/global_path`
-To publish the generated path message as a feasible path from current location to goal
+To publish the generated path message as a feasible path from current location to goal.
 ##### `/visualization/plan`
-To publish a visualized plan in rviz
+To publish a visualized plan in rviz.
 #### Services
 ##### `/clear_map`
 Service that resets the global costmap to its original state in case there is no path find from start point to end point at the first time, to avoid the situation that there is a path but a temporary obstacle makes it impossible to be found.
