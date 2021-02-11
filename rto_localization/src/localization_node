@@ -239,7 +239,7 @@ class ParticleFilter(object):
         else:
             self.adapt_std_for_bad_localization = self.adapt_std_for_bad_localization
             localization_is_accurate = False
-        rospy.loginfo(localization_is_accurate)
+        #rospy.loginfo(localization_is_accurate)
         return localization_is_accurate
 
     def _resample(self): #time = 0.0003
