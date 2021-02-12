@@ -312,20 +312,13 @@ Estimated pose of the localization.
 None
 #### Configuration
 `dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a gaussian noise with this standard deviation.<br>
-<br>
 `dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this standard deviation.<br>
-<br>
 `num_particles`: Number of particles used in the Monte Carlo Localization.<br>
-<br>
 `num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the robot's laser scanner <br>
-<br>
 `update_rate`: This defines the prediction and update rate of the Monte Carlo Localization.<br>
-<br>
 `launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned.<br>
-<br>
 `normalized_comulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
-<br>
-`variance_increase_for_bad_localization`:Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
+`variance_increase_for_bad_localization`: Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
 
 ### rto_global_planner
 #### Description
