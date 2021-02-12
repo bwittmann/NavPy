@@ -1,31 +1,6 @@
 <launch>
-    <arg name="robot_env" default="$(optenv ROBOT_ENV sim_simple)"/>
-    <!-- <arg name="safety" default="true"/> -->
-
-    <arg name="map_file" value="$(find rto_navigation)/maps/$(arg robot_env).yaml" />
-
-    <!-- Run our map server -->
-    <node name="map_server_own" pkg="rto_map_server" type="map_server_node" output='screen'>
-        <rosparam file="$(find rto_map_server)/config/map_server_params.yaml"/>
-    </node>
-
-    <!-- Run costmap genertator -->
-    <node name="costmap_generator" pkg="rto_costmap_generator" type="costmap_generator_node" output='screen'>
-        <rosparam file="$(find rto_costmap_generator)/config/costmap_generator_params.yaml"/>
-    </node>
-
-    <!-- Run mapserver -->
-    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/> -->
-
-    <!-- Run AMCL -->
-    <!-- <include file="$(find amcl)/examples/amcl_omni.launch" /> -->
 
     <!-- Run global planner -->
-    <!-- <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner.py" output="screen"/> -->
     <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
 
-    <!-- Run local planner -->
-    <node name="local_planner" pkg="rto_local_planner_" type="local_planner_node" output='screen'>
-        <rosparam file="$(find rto_local_planner_)/config/local_planner_params.yaml"/>
-    </node>
 </launch>

@@ -1,4 +1,0 @@
-<launch>
-    <include file="$(find rto_bringup_sim)/launch/robot.launch" />
-    <include file="$(find rto_bringup)/launch/rviz.launch" />
-</launch>
