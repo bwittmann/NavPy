@@ -1,7 +1,7 @@
 # NavPy
 
 ## Introduction
-A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ROS navigation stack](http://wiki.ros.org/navigation). The prerequisites which are mentioned in the ROS navigation stack are also relevant for the NavPy navigation stack. The algorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
+A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. As a pre-requisite for navigation stack use, the robot must be running ROS, have a tf transform tree in place, and publish sensor data using the correct ROS Message types. Also, the Navigation Stack needs to be configured for the shape and dynamics of a robot to perform at a high level. The algorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
@@ -14,7 +14,7 @@ A 2D navigation stack that takes in information from odometry, sensor streams, a
 </table>
 
 ## Structure/Overview
-In the following, all packages within this repository are briefly explained.
+In the following, all packages within this repository are briefly explained. In Fig.1 the rqt_graph of NavPy is shown. It contains all nodes and topics which are used in the navigation stack.
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
