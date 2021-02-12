@@ -403,7 +403,7 @@ Afterwards, the NavPy navigation stack can be launched via the launch file navig
 
 To bring up rviz for visualization purposes, please enter the following line into the terminal.
 
-    roslaunch rto_bring_up rviz.launch
+    roslaunch rto_bringup rviz.launch
 
 
 
