@@ -92,12 +92,12 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognized by the system, the accuracy of the localization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laser scan range measurements. Fig.5 depicts the local costmap and an obstacle that is currently not part of the global costmap. 
 
-<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 200%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px">
   <tr>
-    <td style="width: 800px;"> <img src="resources/images/local_costmap.png" width='300'></td>
+    <td style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
   <tr>
-    <td style="width: 800px;" valign="top"> <b>Fig.5:</b> Local costmap (green) detects a new obstacle.
+    <td style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px"" valign="top"> <b>Fig.5:</b> Local costmap (green) detects a new obstacle.
   </tr>
 </table>
 
