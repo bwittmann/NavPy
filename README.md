@@ -287,7 +287,7 @@ This package contains the rto_localization node, which is responsible for locali
 If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in GIF 9 . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td  style="margin-left: auto; margin-right: auto; width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
+    <td  style="margin-left: 250px; margin-right: auto; width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>GIF 9:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
