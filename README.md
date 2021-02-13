@@ -1,27 +1,27 @@
 # NavPy
 
 ## Introduction
-A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs safe velocity commands that are sent to a mobile base. The navigation stack is implemented with Python and is based on the structure of the [ROS navigation stack](http://wiki.ros.org/navigation). The prerequisites which are mentioned in the ROS navigation stack are also relevant for the NavPy navigation stack. The algorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
+A 2D navigation stack that takes in information from odometry, sensor streams, and a goal pose and outputs velocity commands that are sent to a mobile base. As a pre-requisite for navigation stack use, the robot must be running ROS, have a tf transform tree in place, and publish sensor data using the correct ROS Message types. Also, the Navigation Stack needs to be configured for the shape and dynamics of a robot. The algorithm was tested with a [simulation of the Festo Robotino robot (RTO)](https://github.com/dietriro/rto_simulation) in a virtual world in Gazebo. 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_long.gif " width="800"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> NavPy in action.
+    <td style="width: 48%;" valign="top"> <b>Gif.1:</b> NavPy in action.
     </td>
   </tr>
 </table>
 
 ## Structure/Overview
-In the following, all packages within this repository are briefly explained.
+In the following, all packages within this repository are briefly explained. In Fig.1 the rqt_graph of NavPy is shown. It contains all nodes and topics which are used in the navigation stack.
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 1000px;"> <img src="resources/images/rosgraph.png" width='800'></td>
   </tr>
   <tr>
-    <td style="width: 1000px;" valign="top"> <b>Fig.x:</b> rqt_graph of NavPy.
+    <td style="width: 1000px;" valign="top"> <b>Fig.1:</b> rqt_graph of NavPy.
   </tr>
 </table>
 
@@ -78,11 +78,11 @@ In order to allow the use of a point representation of the mobile robot for path
     <td style="width: 48%;"> <img src="resources/images/map_linear1.png" width='300'></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> 'Exponential' soft padding (0.2 m).
+    <td style="width: 48%;" valign="top"> <b>Fig.2:</b> 'Exponential' soft padding (0.2 m).
     </td>
-    <td style="width: 48%;" valign="top">  <b>Fig.x:</b> 'Exponential' soft padding (1.0 m).
+    <td style="width: 48%;" valign="top">  <b>Fig.3:</b> 'Exponential' soft padding (1.0 m).
     </td>
-    <td style="width: 48%;" valign="top">  <b>Fig.x:</b> 'Linear' soft padding (1.0 m).
+    <td style="width: 48%;" valign="top">  <b>Fig.4:</b> 'Linear' soft padding (1.0 m).
     </td>
   </tr>
 </table>
@@ -95,7 +95,7 @@ In a real world scenario it is not enough to make decisions based on a static gl
     <td style="width: 300px;"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
   <tr>
-    <td style="width: 300px;" valign="top"> <b>Fig.x:</b> Local costmap (green) detects a new obstacle.
+    <td style="width: 300px;" valign="top"> <b>Fig.5:</b> Local costmap (green) detects a new obstacle.
   </tr>
 </table>
 
@@ -186,9 +186,9 @@ The overall cost for a control pair is 0 if the robot travels with its maximal l
     <td style="width: 48%;"> <img src="resources/gifs/path_following.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on avoiding obstacles (gain values: 18 12 15 15).
+    <td style="width: 48%;" valign="top"> <b>Gif.2:</b> Local planner focuses on avoiding obstacles (gain values: 18 12 15 15).
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Local planner focuses on staying on the global path (gain values: 28 2 80 1).
+    <td style="width: 48%;" valign="top"> <b>Gif.3:</b> Local planner focuses on staying on the global path (gain values: 28 2 80 1).
     </td>
   </tr>
 </table>
@@ -211,11 +211,11 @@ Based on the values of the related parameters a recovery behaviour will be carri
     <td style="width: 33%;"> <img src="resources/gifs/recovery6.gif" width="300"/></td>
   </tr>
   <tr>
-    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on a small linear velocity.
+    <td style="width: 33%;" valign="top"> <b>Gif.4:</b> Initializing a recovery behaviour based on a small linear velocity.
     </td>
-    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on circling.
+    <td style="width: 33%;" valign="top"> <b>Gif.5:</b> Initializing a recovery behaviour based on circling.
     </td>
-    <td style="width: 33%;" valign="top"> <b>Gif.x:</b> Initializing a recovery behaviour based on path execution time.
+    <td style="width: 33%;" valign="top"> <b>Gif.6:</b> Initializing a recovery behaviour based on path execution time.
     </td>
   </tr>
 </table>
@@ -265,7 +265,7 @@ To initialize a re-planning of the global path after new obstacles have been add
 
 ### rto_localization
 #### Description
-This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used. The navigation stack is able to work in a dynamic environment. Obstacles which are not included in the map will reduce the accuracy of the Monte Carlo localization drastically. Therefore, the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. This performance measurement is used to decide whether the pose of the robot is estimated by the Monte Carlo localization or the odometry. The Monte Carlo Localization is used if the error is smaller than a given threshold. Otherwise, the estimated pose from the last iteration is updated according to the relative motion since then. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. In Gif ... the localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer. In this example the obstacle is not included in the map. In Gif ... the global path is recalculated by the global planer and the map is updated by the rto_costmap_generator. As soon as the obstacle is included in the map the particles of the Monte Carlo Localization estimate the pose of the robot much better. Before the update the localization relies on the odometry.
+This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used. The navigation stack is able to work in a dynamic environment. Obstacles which are not included in the map will reduce the accuracy of the Monte Carlo localization drastically. Therefore, the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. This performance measurement is used to decide whether the pose of the robot is estimated by the Monte Carlo localization or the odometry. The Monte Carlo Localization is used if the error is smaller than a given threshold. Otherwise, the estimated pose from the last iteration is updated according to the relative motion since then. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. In Gif.7 the localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer. In this example the obstacle is not included in the map. In Gif.8 the global path is recalculated by the global planer and the map is updated by the rto_costmap_generator. As soon as the obstacle is included in the map the particles of the Monte Carlo Localization estimate the pose of the robot much better. Before the update the localization relies on the odometry.
 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
@@ -274,21 +274,21 @@ This package contains the rto_localization node, which is responsible for locali
     <td style="width: 48%;"> <img src="resources/gifs/localization_replan.gif " width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Pass dynamic obstacle solely by using local planer.
+    <td style="width: 48%;" valign="top"> <b>Gif.7:</b> Pass dynamic obstacle solely by using local planer.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Update map of localization and recalculate the path.
+    <td style="width: 48%;" valign="top"> <b>Gif.8:</b> Update map of localization and recalculate the path.
     </td>
     </td>
   </tr>
 </table>
 
-If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in Gif ... . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
+If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in Gif.9 . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Gif.x:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
+    <td style="width: 48%;" valign="top"> <b>Gif.9:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
     </td>
   </tr>
 </table>
@@ -312,26 +312,19 @@ Estimated pose of the localization.
 None
 #### Configuration
 `dynamics_translation_noise_std_dev`: Each particle is predicted translational according to the odometry and a gaussian noise with this standard deviation.<br>
-<br>
 `dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this standard deviation.<br>
-<br>
 `num_particles`: Number of particles used in the Monte Carlo Localization.<br>
-<br>
 `num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the robot's laser scanner <br>
-<br>
 `update_rate`: This defines the prediction and update rate of the Monte Carlo Localization.<br>
-<br>
 `launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned.<br>
-<br>
-`normalized_commulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
-<br>
-`variance_increase_for_bad_localization`:Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
+`normalized_comulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
+`variance_increase_for_bad_localization`: Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
 
 ### rto_global_planner
 #### Description
 This package contains the global_planner_node, which creates a global path that can be used by local_planner.
 
-The global planner is based on bidirectional A-Star algorithm. At the beginning, we start search both from current position and goal position. After each iteration, check whether there is an intersection between open list from start point and  goal point. If there is an intersection, then connect the path from start point and end point. In this case, the path might look like very strange, then we do path smoothing to avoid unnecessary turns. At last, to make sure local_planner will get a dense path which is represented by nodes next to each other, path argumentation is applied.
+The global planner is based on bidirectional A-Star algorithm. At the beginning, we start search both from current position and goal position. After each iteration, check whether there is an intersection between open list from start point and  goal point. If there is an intersection, then connect the path from start point and end point. In this case, the path might look like very strange(see Fig.10), then we do path smoothing to avoid unnecessary turns(see Fig.11). At last, to make sure local_planner will get a dense path which is represented by nodes next to each other, path argumentation is applied(see Gif.10).
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
@@ -340,16 +333,27 @@ The global planner is based on bidirectional A-Star algorithm. At the beginning,
     <td style="width: 48%;"> <img src="resources/images/global_path_3.png" width="350"/></td>
   </tr>
   <tr>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> Original path generated by bi-directional a_star.
+    <td style="width: 48%;" valign="top"> <b>Fig.6:</b> Original path generated by bi-directional a_star.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> Path after doing path smoothing.
+    <td style="width: 48%;" valign="top"> <b>Fig.7:</b> Path after doing path smoothing.
     </td>
-    <td style="width: 48%;" valign="top"> <b>Fig.x:</b> Dense path for local planner.
+    <td style="width: 48%;" valign="top"> <b>Fig.8:</b> Dense path for local planner.
     </td>
   </tr>
 </table>
 
-If there is no path from start point to goal point found at the first time, the global_planner will call service `/clear_map`. Then plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles, and this makes it impossible to find a path from start to goal. After a while, the obstacle disappeared, which makes us capable to find a path. So we call service `/clear_map` to make sure if it is solvable without temporary obstacles.
+In some cases, there might be no path from start to end. To make sure reliability of the no path situation, the global_planner will call service `/clear_map`, if there is no path from start point to goal point found at the first time. Then global planner will try to plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles(which is not there anymore), and this makes it impossible to find a path from start to goal. So we call service `/clear_map` to make sure if it is solvable without temporary obstacles(see Gif.10).
+
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+  <tr>
+    <td style="width: 48%;"> <img src="resources/gifs/disappear_obstacle.gif" width="350"/></td>
+  </tr>
+  <tr>
+    <td style="width: 48%;" valign="top"> <b>Gif.10:</b> 
+      Path cannot be found due to disappeared temporary obstacle, call clear map and replan
+    </td>
+  </tr>
+</table>
 
 #### Subscribed Topics
 ##### `/global_costmap`
@@ -373,7 +377,6 @@ Afterwards you have to clone this repository to your catkin space and build it.
 cd ~/catkin_ws/src
 git clone https://github.com/KathiWinter/rto_Robot_Navigation.git
 cd ~/catkin_ws
-rosdep install -y --from-paths src --ignore-src --rosdistro noetic --os=ubuntu:focal
 catkin build
 ```
 
@@ -393,7 +396,7 @@ Afterwards, the NavPy navigation stack can be launched via the launch file navig
 
 To bring up rviz for visualization purposes, please enter the following line into the terminal.
 
-    roslaunch rto_bring_up rviz.launch
+    roslaunch rto_bringup rviz.launch
 
 
 

@@ -14,7 +14,7 @@
     <include file="$(find rto_local_planner)/launch/local_planner.launch"/>
 
     <!-- Run global_planner -->
-    <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
+    <include file="$(find rto_global_planner)/launch/global_planner_bi.launch"/>
  
     <!-- Run rto_safety_node -->
     <group if="$(arg safety)">

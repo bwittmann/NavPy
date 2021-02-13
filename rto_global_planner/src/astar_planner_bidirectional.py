@@ -174,9 +174,9 @@ class Bidirectional_Astar_Planner():
                 break
         return path
 
-    def Path_argument(self, path):
+    def Path_augment(self, path):
         """
-        This is a function to argument path which consists of only key points to dense path
+        This is a function to augment path which consists of only key points to dense path
 
             @patameter path: path represented by points
 
@@ -185,7 +185,7 @@ class Bidirectional_Astar_Planner():
         # set a new path
         new_path = []
 
-        # main function of path argument
+        # main function of path augment
         length = len(path)
         i = 0
         while True:
@@ -512,8 +512,8 @@ class Bidirectional_Astar_Planner():
                 # apply path smoothing function
                 path = self.Path_smoothing(path)
 
-                # apply path argument function
-                path = self.Path_argument(path)
+                # apply path augment function
+                path = self.Path_augment(path)
 
                 # return path
                 return path[::-1]
@@ -672,7 +672,11 @@ class main():
                         try:
                             clear_client = rospy.ServiceProxy('clear_map', ClearMap)
                             clear_client.call("clear")
+                            rospy.loginfo('Global planner: No path found, global costmap is initialized, try again.')
+                            start = (self.pos_x, self.pos_y)
+                            path = global_planner.bi_astar(self.map, self.map_width, self.map_height, start, end)
                         except rospy.ServiceException:
+                            rospy.wait_for_message('global_costmap',OccupancyGrid)
                             rospy.loginfo('Global planner: No path found, global costmap is initialized, try again.')
 
                             # apply searching again since global costmap is cleared
