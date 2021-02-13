@@ -329,7 +329,8 @@ Estimated pose of the localization.
 #### Description
 This package contains the global_planner_node, which creates a global path that can be used by the local_planner to navigate the robot towards the goal.
 
-The global planner is based on a bidirectional A-Star algorithm. At the beginning, we start the search from both the robot's position and the goal position. After each iteration the global planner checks whether there is an intersection between the open list from start point and goal point. If there is an intersection, then the global planner connects the path from the start point to the end point. It might be the case that the path looks like in Fig.10. If this is the case, the global planner applies path smoothing to avoid unnecessary turns (see Fig.11). At last, to make sure that the local_planner will get a dense path that is represented by nodes next to each other, path augmentation is applied (see GIF 10).
+This package contains the global_planner_node, which creates a global path that can be used by the local_planner to navigate the robot towards the goal.
+The global planner is based on a bidirectional A-Star algorithm. At the beginning, we start the search from both the robot's position and the goal position. After each iteration, the global planner will check whether there is an intersection between the open list of searching from the start point and that of the end point. If there is an intersection, then the global planner connects the path from the start point to the end point. It might be the case that the path looks like in Fig.6. So the global planner will then apply path smoothing to avoid unnecessary turns (see Fig.7). At last, to make sure that the local_planner will get a dense path that is represented by nodes next to each other, path augmentation is applied (see Fig.8).
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
@@ -347,7 +348,7 @@ The global planner is based on a bidirectional A-Star algorithm. At the beginnin
   </tr>
 </table>
 
-In some cases, the global planner might not find a path from the current position of the robot to the goal. In this situation the global planner will make a call to the service `/clear_map` to reset the global costmap to its original state. This might delete obstacles that have been added to the global costmap at an earlier time that are not at this position anymore. Doing this might allow the global planner to find a valid path to the goal position. This procedure is also considered a recovery behaviour. A situation where this recovery behaviour helps to plan a valid path toward the goal is shown in GIF 10.
+In some cases, the global planner might not find a path from the current position of the robot to the goal. In this situation, the global planner will make a call to the service `/clear_map` to reset the global costmap to its original state. This might delete obstacles that have been added to the global costmap at an earlier time that are not at this position anymore. Doing this might allow the global planner to find a valid path to the goal position. This procedure is also considered as recovery behaviour. A situation where this recovery behaviour helps to plan a valid path toward the goal (see GIF 10).
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px">
   <tr>
