@@ -92,7 +92,7 @@ In order to allow the use of a point representation of the mobile robot for path
 
 In a real world scenario it is not enough to make decisions based on a static global costmap, since dynamic changes in the surrounding might lead to significant changes in the global costmap. If these changes are not recognized by the system, the accuracy of the localization will be drastically reduced. Therefore, obstacles that are not taken into account by the current version of the global costmap have to be recognized and added in order to allow a smooth and stable navigation of the mobile robot. The local costmap serves this purpose by considering the current laser scan range measurements. Fig.5 depicts the local costmap and an obstacle that is currently not part of the global costmap. 
 
-<table class="center" style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 200%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 200%">
   <tr>
     <td style="width: 800px;"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
@@ -182,7 +182,7 @@ The local planner implemented in this package is based on the dynamic window app
 
 The overall cost for a control pair is 0 if the robot travels with its maximal linear velocity, looks directly towards the goal, is exactly on the global path and the range to the closest obstacle is as big as possible. Based on the gain factors of the different costs the local planner will exhibit a certain behaviour. If the robot, for example, should dynamically avoid obstacles that are not part of the costmap, it would make sense to reduce the gain of the cost that is based on the proximity to the global path and increase the gain of the cost that is related to the proximity to obstacles. It the robot should however follow exactly the global path, different gain values might make more sense. The following GIFs show two completely different strategies for local planning.
 
-<table class="center" style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td style="width: 48%;"> <img src="resources/gifs/obstacle_avoidance.gif" width="350"/></td>
     <td style="width: 48%;"> <img src="resources/gifs/path_following.gif" width="350"/></td>
@@ -285,9 +285,9 @@ This package contains the rto_localization node, which is responsible for locali
 </table>
 
 If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in GIF 9 . To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
-<table class="center" style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
-    <td  class="center" style="width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
+    <td  style="margin-left: auto; margin-right: auto; width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>GIF 9:</b> Increased prediction variance when Monte Carlo localization is not accurate and odometry is used for estimate robot pose.
@@ -346,9 +346,9 @@ The global planner is based on bidirectional A-Star algorithm. At the beginning,
 
 In some cases, there might be no path from start to end. To make sure reliability of the no path situation, the global_planner will call service `/clear_map`, if there is no path from start point to goal point found at the first time. Then global planner will try to plan a path on the original costmap. This is to avoid the situation that the global costmap is updated due to some temporary obstacles(which is not there anymore), and this makes it impossible to find a path from start to goal. So we call service `/clear_map` to make sure if it is solvable without temporary obstacles(see GIF 10).
 
-<table class="center" style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px">
+<table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px">
   <tr>
-    <td class="center" style="width: 48%;"> <img src="resources/gifs/disappear_obstacle.gif" width="350"/></td>
+    <td style="width: 48%;"> <img src="resources/gifs/disappear_obstacle.gif" width="350"/></td>
   </tr>
   <tr>
     <td style="width: 48%;" valign="top"> <b>GIF 10:</b> 
