@@ -94,10 +94,10 @@ In a real world scenario it is not enough to make decisions based on a static gl
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px">
   <tr>
-    <td style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px"> <img src="resources/images/local_costmap.png" width='300'></td>
+    <td style="margin-left: 100px; width: 800px"> <img src="resources/images/local_costmap.png" width='300'></td>
   </tr>
   <tr>
-    <td style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 800px"" valign="top"> <b>Fig.5:</b> Local costmap (green) detects a new obstacle.
+    <td style="width: 800px"" valign="top"> <b>Fig.5:</b> Local costmap (green) detects a new obstacle.
   </tr>
 </table>
 
