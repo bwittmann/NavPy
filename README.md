@@ -272,7 +272,7 @@ To initialize a re-planning of the global path after new obstacles have been add
 
 ### rto_localization
 #### Description
-This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot a Monte Carlo localization algorithm is used. The navigation stack is able to work in a dynamic environment. Obstacles which are not included in the map will reduce the accuracy of the Monte Carlo localization drastically. Therefore, the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. This performance measurement is used to decide whether the pose of the robot is estimated by the Monte Carlo localization or the odometry. The Monte Carlo localization is used if the error is smaller than a given threshold. Otherwise, the estimated pose from the last iteration is updated according to the relative motion since then. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. In GIF 7 the localization relies on the odometry when it passes a dynamic obstacle solely by using the local planer. In this example the obstacle is not included in the map. In GIF 8 the global path is recalculated by the global planer and the map is updated by the rto_costmap_generator. As soon as the obstacle is included in the map the particles of the Monte Carlo localization estimate the pose of the robot much better. Before the update the localization relies on the odometry.
+This package contains the rto_localization node, which is responsible for localizing the robot in a map. When the rto_localization is launched it requests the map from the rto_map_server. For localizing the robot, a Monte Carlo localization algorithm is used. The navigation stack is able to work in a dynamic environment. Obstacles which are not included in the map will reduce the accuracy of the Monte Carlo localization drastically. Therefore, the map is updated by the rto_costmap_generator. The performance of the Monte Carlo localization is measured by the averaged error of all particles. This performance measurement is used to decide whether the pose of the robot is estimated by the Monte Carlo localization or the odometry. The Monte Carlo localization is used if the error is smaller than a given threshold. Otherwise, the estimated pose from the last iteration is updated according to the relative motion since then. The relative motion is received from the odometry. This is especially important when the robot senses a dynamic obstacle which is not yet included in the map. Such situations can be seen in the following. In GIF 7 the robot passes a dynamic obstacle solely by using the local planer. The obstacle is not included in the map. In GIF 8 the global path is recalculated by the global planer and the map is updated. In both situations the robot pose is estimated by the odometry as long as the robot senses the unknown obstacle. After updating the map or passing the obstacle the Monte Carlo localization is accurate again and can be used to estimate the robot pose.
 
 
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
@@ -289,7 +289,7 @@ This package contains the rto_localization node, which is responsible for locali
   </tr>
 </table>
 
-If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in GIF 9. To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
+If the localization is not accurate for several iterations it might happen, that the particles drift away. By predicting the particles with a higher variance, the particles spread out. This allows the Monte Carlo localization to catch the pose of the robot again. It can be seen in GIF 9. To make sure, that the variance is not dominating the prediction of the particles, it is adapted to the angular and translational velocity of the robot.
 <table style="margin-left: auto; margin-right: auto; table-layout: fixed; width: 100%">
   <tr>
     <td  style="margin-left: 250px; margin-right: auto; width: 48%;"> <img src="resources/gifs/localization_catch.gif" width="350"/></td>
@@ -310,7 +310,7 @@ Motion of the robot estimated by odometry to predict particles.
 Update dynamic obstacles in the map.
 #### Published Topics
 ##### `/particles`
-Visualization of all particles in rvis as red arrows.
+Visualization of all particles in rviz as red arrows.
 ##### `/particle`
 Visualization of the estimated pose of the localization in rviz as green arrow.
 ##### `/pose`
@@ -320,7 +320,7 @@ Estimated pose of the localization.
 `dynamics_orientation_noise_std_dev`: Each particle is predicted rotatory according to the odometry and a gaussian noise with this standard deviation.<br>
 `num_particles`: Number of particles used in the Monte Carlo localization.<br>
 `num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the robot's laser scanner <br>
-`update_rate`: This defines the prediction and update rate of the Monte Carlo localization.<br>
+`update_rate`: Prediction and update rate of the Monte Carlo localization.<br>
 `launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned.<br>
 `normalized_comulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
 `variance_increase_for_bad_localization`: Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
