@@ -321,6 +321,7 @@ Estimated pose of the localization.
 `num_particles`: Number of particles used in the Monte Carlo localization.<br>
 `num_beams`: Number of laser beams used for updating the particles. The algorithm subsamples equally from all the laser beams of the robot's laser scanner <br>
 `update_rate`: Prediction and update rate of the Monte Carlo localization.<br>
+`odom_noise`: Noise can be included in the odometry which is used to predict the particles.<br>
 `launch_style`: The particles of the localization can be initialized randomly in the map or close to the position where the robot is spawned.<br>
 `normalized_comulated_localization_error`: Threshold which defines whether the localization or the odometry is used to estimate the robot's pose.<br>
 `variance_increase_for_bad_localization`: Defines how much the translation and orientation standard deviation is increased when the localization is not accurate and the odometry is used to estimate the pose of the robot .<br>
