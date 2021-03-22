@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import cv2
+import os
+
+from rto_map_server.srv import GetMap, GetMapResponse
+from nav_msgs.msg import OccupancyGrid
+
+
+class MapServer():
+    """
+    Class used for creation of a node that acts as a map server.
+    The map server should transform a .pgm file from the maps folder and add meta information
+    which is stored in the corresponding .yaml file. This map server also works with multiple maps, 
+    which have to be added to the .yaml file in the config folder of this package.
+
+    Service 'get_map'
+    @request: map_nr [int64]
+    @response: map [nav_msgs/OccupancyGrid]
+    """
+
+    def __init__(self):
+        """
+        Method for initialization of an instance of the MapServer class. It reads in parameters
+        from a parameter server and loads and converts images corresponding to maps from the maps 
+        folder of this package to numpy arrays.
+        """
+        # Get parameters from parameter server
+        self.maps_nr = rospy.get_param('~maps_nr')
+        self.debug_mode = rospy.get_param('~debug_mode')
+
+        # Init publisher
+        self.pub_map = rospy.Publisher('/map', OccupancyGrid, queue_size=10, latch=True)
+
+        # Get the time when maps were loaded for OccupancyGrid message
+        self.load_time = rospy.Time.now()
+
+        self.map_info = {}
+        for map_nr in range(1, self.maps_nr + 1):
+            self.map_info['map' + str(map_nr)] = rospy.get_param('~map' + str(map_nr))
+
+            # Create path to .pgm file of map and store it in the dict
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            img_path = os.path.join(dir_path[:-4], 'maps', self.map_info['map' + str(map_nr)]['image'])
+            self.map_info['map' + str(map_nr)]['image_path'] = img_path   # TODO: even necessary to store image path? 
+
+            # Transform the .pgm files of the maps to a numpy.ndarray of dtype int8 and prepare data for OccupancyGrid
+            map_raw = cv2.imread(self.map_info['map' + str(map_nr)]['image_path'], cv2.IMREAD_GRAYSCALE).astype(np.int8)
+
+            map_raw[map_raw == 0] = 100
+            map_raw[map_raw == -51] = -1
+            map_raw[map_raw == -2] = 0
+
+            self.map_info['map' + str(map_nr)]['map_raw'] = map_raw
+
+        if self.debug_mode == True:
+            print(self.map_info)
+            cv2.imwrite('map1.jpg', self.map_info['map1']['map_raw'])
+
+        # Perpare messages for the service
+        self._get_occupancy_grid()
+
+        # Publish initial map once on latched topic (for visualization in rvis)
+        self.pub_map.publish(self.occupancy_grids['map1'])
+
+        if len(self.occupancy_grids) == 0:
+            rospy.logwarn('Map server: Currently 0 maps are stored.')
+
+        # Clear dict to save space
+        self.map_info.clear()
+
+    def _get_occupancy_grid(self):
+        """
+        Private method, which prepares OccupancyGrid messages for the response of the service. 
+        """
+        self.occupancy_grids = {}
+        for key in self.map_info:
+
+            # Prepare OccupancyGrid massage for service
+            occupancy_grid = OccupancyGrid()
+            occupancy_grid.header.frame_id = 'map'
+            occupancy_grid.header.seq = 0
+            occupancy_grid.info.map_load_time = self.load_time
+            occupancy_grid.info.resolution = self.map_info[key]['resolution']
+            occupancy_grid.info.height = self.map_info[key]['map_raw'].shape[0]
+            occupancy_grid.info.width = self.map_info[key]['map_raw'].shape[1]
+            occupancy_grid.info.origin.position.x = self.map_info[key]['origin'][0]
+            occupancy_grid.info.origin.position.y = self.map_info[key]['origin'][1]
+            occupancy_grid.info.origin.position.z = self.map_info[key]['origin'][2]
+            occupancy_grid.info.origin.orientation.x = 0
+            occupancy_grid.info.origin.orientation.y = 0
+            occupancy_grid.info.origin.orientation.z = 0
+            occupancy_grid.info.origin.orientation.w = 1
+
+            # We have to flip the array to adjust the origin
+            occupancy_grid.data = np.flip(self.map_info[key]['map_raw'], axis=0).ravel()
+
+            self.occupancy_grids[key] = occupancy_grid
+
+    def _handle_get_map(self, req):
+        """
+        Handler method for the service 'get_map', which returns the fitting OccupancyGrid to the
+        incoming request.
+
+        @param req: An integer referring to the map number to return.
+        @return: A OccupancyGrid message corresponding to the map number of the request.
+        """
+        if 'map' + str(req.map_nr) not in self.occupancy_grids:
+            rospy.logerr("Map server: Request to 'get_map' failed. Request does not match to any stored maps.")
+            return
+        else:
+            rospy.loginfo("Map server: Service 'get_map' requested (request: '{}').".format(req))
+
+            # Add time stamp to response message
+            self.occupancy_grids['map' + str(req.map_nr)].header.stamp = rospy.Time.now()
+
+            # Publish new map on latched topic (for rvis)
+            self.pub_map.publish(self.occupancy_grids['map' + str(req.map_nr)])
+
+            return self.occupancy_grids['map' + str(req.map_nr)]
+
+    def start_server(self):
+        """
+        Main method of the MapServer class. Provides a service by creating a rospy.Service instance.
+        """
+        rospy.Service('get_map', GetMap, self._handle_get_map)
+        rospy.spin()
+
+
+if __name__ == '__main__':
+    # Initialize a ROS node named map_server
+    rospy.init_node('map_server')
+
+    map_server = MapServer()
+    map_server.start_server()

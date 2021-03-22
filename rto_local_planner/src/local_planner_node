@@ -1,0 +1,539 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import time
+import tf
+
+from threading import Lock, Thread
+from nav_msgs.msg import Odometry, Path, OccupancyGrid
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Quaternion, Point
+from sensor_msgs.msg import LaserScan, PointCloud
+from visualization_msgs.msg import Marker
+from std_msgs.msg import String
+from rto_costmap_generator.srv import AddLocalMap
+
+
+# Create wrapper for easy timing of methods by using a decorator
+def timed(func):
+    def wrapper(*args):
+        if not log_times:
+            return func(*args)
+        time_start = time.time()
+        out = func(*args)
+        time_end = time.time()
+        time_took = time_end - time_start
+        rospy.loginfo('Local planner: Method {} took {}s.'.format(func.__name__, np.round(time_took, 5)))
+        return out
+    return wrapper
+
+# Create wrapper for easy threading by using a decorator
+def threaded(fn):
+    def wrapper(*args):
+        Thread(target=fn, args=args).start()
+    return wrapper
+
+
+class DWALocalPlanner():
+    """
+    Class used for initialization of a node that is responsible for publishing a command velocity to 
+    lead the robot towards the goal.
+
+    This local planner is based on the dynamic window approach, which is an online collision avoidance 
+    strategy that samples trajectories from a generated valid search space and selects the best trajectory
+    for the current situation based on a cost function. This cost function gets optimized based on the angle to
+    the goal, the proximity to the global path, the linear velocity and the proximity to obstacles. Therefore, based
+    on the values of the parameters, this local planner tries to make the robot stay on the global path, 
+    look towards the goal, stay far away from obstacles and drive with a high linear velocity.
+    """
+
+    def __init__(self, freq):
+        """
+        Method for initialization of an instance of the DWALocalPlanner class. It, for example,
+        reads in parameters from a parameter server and initializes publishers. 
+
+        @param freq: Frequency at which the local planner operates.
+        """
+        # Init mutex
+        self.lock = Lock()
+
+        # Init tf listener
+        self.listener = tf.TransformListener()
+
+        # Get parameters from parameter server
+        self.min_lin_vel = rospy.get_param('~min_linear_vel')
+        self.max_lin_vel = rospy.get_param('~max_linear_vel')
+        self.min_ang_vel = rospy.get_param('~min_angular_vel')
+        self.max_ang_vel = rospy.get_param('~max_angular_vel')
+        self.max_acc = rospy.get_param('~max_acc')
+        self.max_dec = rospy.get_param('~max_dec')
+
+        self.robot_radius = rospy.get_param('~robot_diameter')/2
+        self.safety_distance = rospy.get_param('~safety_distance')
+        self.min_dist_goal = rospy.get_param('~min_dist_goal')
+        self.lookahead = rospy.get_param('~lookahead')
+
+        self.res_ang_vel_space = rospy.get_param('~res_ang_vel_space')
+        self.res_lin_vel_space = rospy.get_param('~res_lin_vel_space')
+
+        self.gain_vel = rospy.get_param('~gain_vel')
+        self.gain_prox_to_path = rospy.get_param('~gain_glob_path')
+        self.gain_angle_to_goal = rospy.get_param('~gain_goal_angle')
+        self.gain_prox_to_obst = rospy.get_param('~gain_clearance')
+
+        self.rec_min_lin_vel = rospy.get_param('~rec_min_lin_vel')
+        self.rec_min_lin_vel_time = rospy.get_param('~rec_min_lin_vel_time')
+        self.rec_circling_time = rospy.get_param('~rec_circling_time')
+        self.rec_path_time_factor = rospy.get_param('~rec_path_time_factor')
+        self.rec_path_length = rospy.get_param('~rec_path_length')
+
+        self.debug_mode = rospy.get_param('~debug_mode')
+        self.log_times = rospy.get_param('~log_times')
+        self.show_local_path = rospy.get_param('~show_path')
+
+        # Setup PoseStamped for transformation of points from frame /odom to /map
+        self.pose = PoseStamped()
+        self.pose.header.frame_id= '/odom'
+
+        # Init subscriptions
+        rospy.Subscriber('/odom', Odometry, self._cb_current_twist_and_pose)
+        rospy.Subscriber('/global_path', Path, self._cb_global_path)
+        rospy.Subscriber('/local_obstacles', PointCloud, self._cb_local_obstacles)
+
+        # Init publisher
+        self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.pub_local_path = rospy.Publisher('/visualization/local_path', Marker, queue_size=10)
+        self.pub_goal = rospy.Publisher('/goal', PoseStamped, queue_size=10)
+
+        # Setup marker for visualization of local path
+        self.local_plan_marker = Marker()
+        self.local_plan_marker.header.frame_id = 'map'
+        self.local_plan_marker.ns = 'navigation'
+        self.local_plan_marker.id = 0
+        self.local_plan_marker.type = Marker.LINE_STRIP
+        self.local_plan_marker.action = Marker.ADD
+        self.local_plan_marker.scale.x = 0.05
+        self.local_plan_marker.color.a = 0.5
+        self.local_plan_marker.color.r = 0.0
+        self.local_plan_marker.color.g = 1.0
+        self.local_plan_marker.color.b = 0.4
+        self.local_plan_marker.pose.orientation = Quaternion(0, 0, 0, 1)
+  
+        # Setup Twist message for publishing cmd_vel
+        self.twist = Twist()
+        self.twist.linear.y = 0
+        self.twist.linear.z = 0
+        self.twist.angular.x = 0
+        self.twist.angular.y = 0
+
+        # Init instance variables
+        self.dt = 1/freq
+        self.current_pose = (0, 0, 0)
+        self.current_twist = (0, 0, 0)
+        self.global_path = np.array([[0, 0], [0, 0]])
+        self.obstacles = []
+        self.follow_plan = False
+
+    def _cb_current_twist_and_pose(self, msg):
+        """
+        A callback function that retrieves the pose and twist from the odometry and transforms them 
+        into the map frame.
+
+        @param msg: Message of the type Odometry.
+        """
+        self.listener.waitForTransform('/map', '/odom', rospy.Time(), rospy.Duration(10.0))
+        self.lock.acquire()
+
+        # Transform robot pose to from /odom to /map frame 
+        self.pose.header.stamp = self.listener.getLatestCommonTime('/map', '/odom')
+        self.pose.pose.position = msg.pose.pose.position
+        self.pose.pose.orientation = msg.pose.pose.orientation
+        position = self.listener.transformPose('/map', self.pose)
+
+        # Transform quaternion received from msg to euler representation
+        quaternion = (position.pose.orientation.x, position.pose.orientation.y, \
+            position.pose.orientation.z, position.pose.orientation.w)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+
+        self.current_pose = (position.pose.position.x, position.pose.position.y, euler[2])
+        self.current_twist = (msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z)
+        self.lock.release()
+
+    def _cb_global_path(self, msg):
+        """
+        A callback function that retrieves the global path and transforms it into
+        a numpy array.
+
+        @param msg: Message of the type Path.
+        """
+        self.lock.acquire()
+
+        global_path = []
+        for pose in msg.poses:
+            global_path.append((pose.pose.position.x, pose.pose.position.y))
+        self.goal = global_path[-1]
+        self.global_path = np.array(global_path)
+
+        self.follow_plan = True
+        self.lock.release()
+        rospy.loginfo('Local planner: Reveived a global path.')
+
+    def _cb_local_obstacles(self, msg):
+        """
+        A callback function that retrieves the point cloud of the local obstacles and 
+        transforms it into a numpy array.
+
+        @param msg: Message of the type PointCloud.
+        """
+        self.lock.acquire()
+
+        obstacles = []
+        for point in msg.points:
+            obstacles.append((point.x, point.y))
+        self.obstacles = np.array(obstacles)
+
+        self.lock.release()
+
+    @staticmethod
+    def _euclidean_distance(point1, point2=(0,0)):
+        """
+        Static method that estimates the euclidean distance of two points.
+        
+        @params point1: A tuple containing the x and y coordinate of the first point. 
+        @params point2: A tuple containing the x and y coordinate of the second point.
+        """
+        return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+
+    def _get_dynamic_window(self, lin_vel, ang_vel):
+        """
+        Private method that estimates the dynamic window consisting of velocities that are reachable for the 
+        next time step. 
+
+        @param lin_vel: Current linear velocity of the robot.
+        @param ang_vel: Current angular velocity of the robot.
+        @return: Dynamic window represented as a numpy array where each element is a tuple of a reachable
+                 linear and angular velocity pair.
+        """
+        dt = self.lookahead
+
+        # Set velocity space that is reachable for the robot based on current velocity and max. acceleration
+        # and check if the maximal velocity boundaries are crossed. 
+        if (lin_vel + self.max_acc * dt) > self.max_lin_vel and (lin_vel - self.max_acc * dt) < self.min_lin_vel:
+            lin_vel_space = np.linspace(self.min_lin_vel, self.max_lin_vel, self.res_lin_vel_space)
+        elif (lin_vel + self.max_acc * dt) > self.max_lin_vel and (lin_vel - self.max_acc * dt) > self.min_lin_vel:
+            lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, self.max_lin_vel, self.res_lin_vel_space)
+        elif (lin_vel + self.max_acc * dt) < self.max_lin_vel and (lin_vel - self.max_acc * dt) < self.min_lin_vel:
+            lin_vel_space = np.linspace(self.min_lin_vel, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
+        else:
+            lin_vel_space = np.linspace(lin_vel - self.max_acc * dt, lin_vel + self.max_acc * dt, self.res_lin_vel_space)
+
+        if (ang_vel + self.max_acc * dt) > self.max_ang_vel and (ang_vel - self.max_acc * dt) < self.min_ang_vel:
+            ang_vel_space = np.linspace(self.min_ang_vel, self.max_ang_vel, self.res_ang_vel_space)
+        elif (ang_vel + self.max_acc * dt) > self.max_ang_vel and (ang_vel - self.max_acc * dt) > self.min_ang_vel:
+            ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, self.max_ang_vel, self.res_ang_vel_space)
+        elif (ang_vel + self.max_acc * dt) < self.max_ang_vel and (ang_vel - self.max_acc * dt) < self.min_ang_vel:
+            ang_vel_space = np.linspace(self.min_ang_vel, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
+        else:
+            ang_vel_space = np.linspace(ang_vel - self.max_acc * dt, ang_vel + self.max_acc * dt, self.res_ang_vel_space)
+
+        # Make use of np.meshgrid to get an array containing all the samples that have been discretely sampled from the Vd control space
+        xv, yv = np.meshgrid(ang_vel_space, lin_vel_space)
+        Vd = np.empty((self.res_lin_vel_space, self.res_ang_vel_space), dtype='float32, float32')
+        
+        for i in range(self.res_lin_vel_space):
+            for j in range(self.res_lin_vel_space):
+                Vd[i,j] = (xv[i,j], yv[i,j])
+
+        return Vd
+
+    def _motion_update(self, robot_state, control_pair, traj_resolution=10):
+        """
+        Private method that estimates the motion update of the robot based on its current state
+        and a control pair. Furthermore, it creates a trajectory.
+
+        @param robot_state: A tuple consisting of the robots current position and orientation (x, y, yaw).
+        @param control_pair: A tuple consisting of an angular and linear velocity (w, v).
+        @param traj_resolution: The resolution of the trajectory.
+        @return: A tuple consisting of the robots updated position and orientation (xn, yn, yawn) and a 
+                 list containing points of the corresponding trajectory.
+        """
+        x, y, yaw = robot_state
+        w, v = control_pair
+        dt = self.lookahead/traj_resolution
+        traj = []
+
+        if abs(w) < 0.001:  # update if ang vel is extremely small to avoid dividing with 0
+            dx = (v * np.cos(yaw) * dt)
+            dy = (v * np.sin(yaw) * dt)
+            yawn = yaw + self.lookahead * w 
+            for step in range(1, traj_resolution + 1):
+                traj.append((x + dx * step, y + dy * step))
+            xn, yn = traj[-1]
+            return (xn, yn, yawn), traj
+        else:
+            r = v/w
+            dx_partial = -r * np.sin(yaw)
+            dy_partial = r * np.cos(yaw)
+            yawn = yaw + self.lookahead * w
+
+            for step in range(1, traj_resolution + 1):
+                yawn_calc = yaw + w * dt * step
+                traj.append((x + dx_partial + r * np.sin(yawn_calc), y + dy_partial - r * np.cos(yawn_calc)))
+            xn, yn = traj[-1]
+            return (xn, yn, yawn), traj
+
+    def _check_goal_reached(self, robot_state):
+        """
+        Private method that checks if the goal is reached.
+
+        @param: A tuple consisting of the robots current state (x, y, yaw).
+        @return: A boolean that indicates if the goal has been reached.
+        """
+        if self._euclidean_distance(robot_state[:2], self.goal) < self.min_dist_goal:
+            return True
+        else:
+            return False
+
+    #@timed
+    def _get_cost(self, control_pair, robot_state, path, obstacles, show_costs=False):
+        """
+        Private method that calculates the cost of a given control pair.
+
+        @param control_pair: A tuple consisting of an angular and linear velocity (w, v).
+        @param robot_state: A tuple consisting of the robots current state (x, y, yaw).
+        @param path: An array containing the elements of the global path.
+        @param obstacles: An array containing local obstacles.
+        @param show_cost: A boolean that enables or disables to log the costs.
+        @return: The cost of the control pair and its corresponding trajectory.
+        """
+        new_state, traj = self._motion_update(robot_state, control_pair)
+        goal = path[-1]
+        lin_vel = control_pair[1]
+
+        cost_vel = self._get_vel_cost(lin_vel)
+        cost_angle_to_goal = self._get_angle_to_goal_cost(new_state, control_pair, goal)
+        cost_prox_to_path = self._get_prox_to_path_cost(new_state, path)
+        cost_prox_to_obst = self._get_prox_to_obst_cost(traj, control_pair, obstacles)
+
+        if show_costs == True:
+            print(np.round(cost_vel, 3), np.round(cost_angle_to_goal, 3), np.round(cost_prox_to_path, 3), \
+                np.round(cost_prox_to_obst, 3))
+
+        return (self.gain_vel * cost_vel + self.gain_prox_to_path * cost_prox_to_path +\
+            self.gain_angle_to_goal * cost_angle_to_goal + self.gain_prox_to_obst * cost_prox_to_obst), traj
+
+    def _get_vel_cost(self, lin_vel):
+        """
+        Private method that estimates a cost based on a linear velocity.
+
+        @param lin_vel: A linear velocity.
+        @return: A cost based on the linear velocity.
+        """
+        cost_vel = ((self.max_lin_vel - self.min_lin_vel) - lin_vel) / (self.max_lin_vel - self.min_lin_vel)
+        return cost_vel
+
+    def _get_angle_to_goal_cost(self, new_state, control_pair, goal):
+        """
+        Private method that estimates a cost based on the angle between the robot and the
+        goal position.
+
+        @param new_state: A tuple consisting of the new state of the robot (xn, yn, yawn).
+        @param control_pair: A tuple consisting of an angular and linear velocity (w, v).
+        @param goal: A tuple consisting of the position of the goal (x, y).
+        @return: A cost based on an angle.
+        """
+        xn, yn, yawn = new_state
+        xg, yg = goal
+        angle = np.arctan2((yg-yn), (xg-xn)) - yawn
+        cost_angle_to_goal = abs(np.arctan2(np.sin(angle), np.cos(angle))) / np.pi
+        return cost_angle_to_goal
+
+    def _get_prox_to_path_cost(self, new_state, path):
+        """
+        Private method that estimates a cost based on the distance of the state of the 
+        robot to the global path.
+
+        @param new_state: A tuple consisting of the new state of the robot (xn, yn, yawn).
+        @param path: An array containing the elements of the global path.
+        @return: A cost based on a distance.
+        """
+        diff = path - new_state[0:2]
+        euc_distances = np.sqrt(np.power(diff[:, 0], 2) + np.power(diff[:, 1], 2))
+        min_dist_to_path = np.min(euc_distances)
+        return min_dist_to_path
+
+    def _get_prox_to_obst_cost(self, traj, control_pair, obstacles):
+        """
+        Private method that estimates a cost based on the distance of a trajectory to sensed 
+        obstacles and the current linear velocity.
+
+        @param traj: A list containing the points of the trajectory. 
+        @param control_pair: A tuple consisting of an angular and linear velocity (w, v).
+        @param obstacles: An array containing local obstacles.
+        @return: A cost based on a distances and a velocity.
+        """
+        # Include the break distance according to the current linear velocity
+        threshold = self.robot_radius + self.safety_distance + (control_pair[1]**2)/(2*self.max_dec)
+
+        traj = np.array(traj)
+        traj_x, traj_y = traj[:, 0].reshape((-1, 1)), traj[:, 1].reshape((-1, 1))
+
+        try:
+            obst_x, obst_y = obstacles[:, 0], obstacles[:, 1]
+        except IndexError:
+            return 0.60 #based on 1/range_local_costmap
+
+        distance_x = traj_x - obst_x  
+        distance_y = traj_y - obst_y
+
+        distance = np.sqrt(distance_x**2 + distance_y**2)
+        min_distance_measured = np.min(distance)
+
+        if min_distance_measured < threshold:
+            return np.inf
+        else:
+            return 1/min_distance_measured
+
+    def _init_recovery(self, reason):
+        """
+        Private method that initializes the recovery behaviour.
+
+        @param reason: A string describing why the recovery was necessary.
+        """
+        rospy.loginfo('Local planner: Init recovery ({}).'.format(reason))
+        self.follow_plan = False
+        self.twist.linear.x = 0
+        self.twist.angular.z = 0
+        self.pub_cmd_vel.publish(self.twist)
+
+        # Call add_local_map service
+        rospy.wait_for_service('add_local_map')
+        add_local_map = rospy.ServiceProxy('add_local_map', AddLocalMap)
+        try:
+            add_local_map('stuck')
+        except rospy.ServiceException:
+            rospy.logerr("Local planner: Local costmap could not be added to global costmap.")
+
+        msg = PoseStamped()
+        msg.pose.position.x = self.goal[0]
+        msg.pose.position.y = self.goal[1]
+        self.pub_goal.publish(msg)
+
+    def run(self):
+        """
+        Main method of the DWALocalPlanner class. 
+        It, for example, estimates the best trajectory, publishes the cmd_vel and decides when to
+        initialize a recovery behaviour.
+        """
+        # Init variables for recovery behaviour
+        count_circling_neg = 0
+        count_circling_pos = 0
+        count_small_lin_vel = 0
+        count_time = 0
+
+        while not rospy.is_shutdown():
+            start = time.time()
+
+            # To avoid problem that follow_plan get set to True via a new plan and instantly gets 
+            # set to False again by the _check_goal_reached method.
+            if self.follow_plan == False:
+                rospy.sleep(self.dt)
+                continue
+
+            # Get current values from subscribed topics
+            lin_vel = self.current_twist[0]
+            ang_vel = self.current_twist[2]
+            global_path = self.global_path
+            robot_state = self.current_pose
+            obstacles = self.obstacles
+            
+            # Get dynamic window
+            Vd = self._get_dynamic_window(lin_vel, ang_vel)
+
+            # Calcualte cost for each element in the dynamic window
+            lowest_cost = np.inf
+            for i in range(self.res_lin_vel_space):
+                for j in range(self.res_ang_vel_space):
+                    pair = Vd[i,j]
+                    cost, traj = self._get_cost(pair, robot_state, global_path, obstacles)
+                    if cost < lowest_cost:
+                        lowest_cost = cost
+                        best_pair = pair
+                        best_traj = traj
+
+            # Detect if the robot is 'stuck'
+            if best_pair[1] < self.rec_min_lin_vel:    # based on small linear vel
+                count_small_lin_vel += 1
+                if count_small_lin_vel == self.rec_min_lin_vel_time/self.dt:
+                    self._init_recovery('small linear vel')
+            else:
+                count_small_lin_vel = 0
+                
+            if np.sign(best_pair[0]) == -1:   # based on circling
+                count_circling_neg += 1
+                count_circling_pos = 0
+            else:
+                count_circling_pos += 1
+                count_circling_neg = 0
+
+            if count_circling_pos > self.rec_circling_time/self.dt or count_circling_neg > self.rec_circling_time/self.dt:
+                count_circling_pos = 0
+                count_circling_neg = 0
+                self._init_recovery('circling')
+
+            count_time += 1    # based on execution time of the current path and its length
+            global_path_length = len(global_path)
+            if count_time == np.floor(self.rec_path_time_factor*global_path_length/self.dt) and global_path_length > self.rec_path_length:
+                count_time = 0
+                self._init_recovery('overall time')
+
+            # Publish velocity commands
+            if self.follow_plan == True:
+                self.twist.linear.x = best_pair[1]
+                self.twist.angular.z = best_pair[0] 
+                self.pub_cmd_vel.publish(self.twist)
+
+            # Check if goal is reached based on distance between robot and goal
+            if self._check_goal_reached(robot_state) == True:
+                rospy.loginfo('Local planner: Goal position reached.')
+                self.follow_plan = False
+                count_time = 0
+                count_circling_pos = 0
+                count_circling_neg = 0
+                self.twist.linear.x = 0
+                self.twist.angular.z = 0
+                self.pub_cmd_vel.publish(self.twist)
+
+            # Publish visualization of local path
+            if self.show_local_path == True and self.follow_plan == True:
+                self.local_plan_marker.points.clear()
+                for point in best_traj:
+                    self.local_plan_marker.points.append(Point(point[0] , point[1], 0))
+                self.pub_local_path.publish(self.local_plan_marker)
+            elif self.show_local_path == True and self.follow_plan == False:
+                self.local_plan_marker.points.clear()
+                self.pub_local_path.publish(self.local_plan_marker)
+
+            # Show messages for debugging
+            if self.debug_mode == True:
+                print('current v: ', np.round(ang_vel, 3), np.round(lin_vel, 3))
+                print('range dw: ', Vd[0,0], Vd[0,-1], Vd[-1,0], Vd[-1,-1])
+                print('best score: ', best_pair, 'cost: ', self._get_cost(best_pair, robot_state, global_path, obstacles, True)[0])
+                print('current pos: ', robot_state)
+                print('----------------------')
+
+            end = time.time()
+            if self.log_times == True:
+                rospy.loginfo("Local planner: Loop of method 'run' took {}s".format(str(np.round(end - start, 4))))
+
+            # To ensure that desired frequency does not get affected by computation time.
+            rospy.sleep(self.dt - end + start)
+
+
+if __name__ == '__main__':
+    rospy.init_node('local_planner')
+
+    log_times = rospy.get_param('~log_times')
+
+    local_planner = DWALocalPlanner(10)
+    local_planner.run()

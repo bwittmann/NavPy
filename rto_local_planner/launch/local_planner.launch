@@ -1,0 +1,7 @@
+<launch>
+
+    <node name="local_planner" pkg="rto_local_planner" type="local_planner_node" output='screen'>
+        <rosparam file="$(find rto_local_planner)/config/local_planner_params.yaml"/>
+    </node>
+
+</launch>

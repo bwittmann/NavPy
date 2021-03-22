@@ -1,0 +1,6 @@
+<launch>
+
+    <!-- Run global planner -->
+    <node name="rto_global_planner" pkg="rto_global_planner" type="astar_planner_bidirectional.py" output="screen"/>
+
+</launch>

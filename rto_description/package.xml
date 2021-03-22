@@ -1,0 +1,12 @@
+<package format="2">
+  <name>rto_description</name>
+  <version>0.1.0</version>
+  <description>The rto_description package</description>
+  <maintainer email="suraj.nair@tum-create.edu.sg">Suraj Nair</maintainer>
+  <maintainer email="aravind.v@tum-create.edu.sg">Aravind V</maintainer>
+  <license>BSD</license>
+  <url type="website">http://wiki.ros.org/rto_description</url>
+  <author email="verbeek@servicerobotics.eu">Christian Verbeek</author>
+  <!-- The *_depend tags are used to specify dependencies -->
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

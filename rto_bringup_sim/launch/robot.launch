@@ -1,0 +1,24 @@
+<launch>
+    <arg name="robot" default="$(optenv ROBOT rto-1)" doc="Robot type [rto-1]"/>
+    <arg name="robot_env" default="$(optenv ROBOT_ENV simple_world)" doc="Simulation world [simple_world, hallway_loop]"/>
+    <arg name="x_pos" default="0.0"/>
+    <arg name="y_pos" default="0.0"/>
+    <arg name="z_pos" default="0.0"/>
+
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find rto_worlds)/worlds/$(arg robot_env).world"/> 
+        <arg name="paused" value="false"/>
+        <arg name="use_sim_time" value="true"/>
+        <arg name="gui" value="true"/>
+        <arg name="headless" value="false"/>
+        <arg name="debug" value="false"/>
+    </include>
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" output="screen">
+        <param name="publish_frequency" type="double" value="20.0" />
+    </node>
+
+    <param name="robot_description" command="$(find xacro)/xacro --inorder $(find rto_description)/urdf/$(arg robot).urdf.xacro" />
+
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf"  args="-urdf -model $(arg robot) -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
+</launch>

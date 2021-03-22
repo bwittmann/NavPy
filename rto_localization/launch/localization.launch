@@ -1,0 +1,6 @@
+
+<launch>
+   <node pkg="rto_localization" type="localization_node" output="screen" name="localization_node">
+	<rosparam file="$(find rto_localization)/config/localization_node_params.yaml"/>
+   </node>
+</launch>

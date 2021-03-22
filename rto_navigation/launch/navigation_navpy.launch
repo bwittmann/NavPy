@@ -1,0 +1,23 @@
+<launch>
+    <arg name="safety" default="true"/>
+
+    <!-- Run map server -->
+    <include file="$(find rto_map_server)/launch/map_server.launch"/>
+  
+    <!-- Run costmap generator -->
+    <include file="$(find rto_costmap_generator)/launch/costmap_generator.launch"/>
+
+    <!-- Run localization -->
+    <include file="$(find rto_localization)/launch/localization.launch"/>
+
+    <!-- Run local planner -->
+    <include file="$(find rto_local_planner)/launch/local_planner.launch"/>
+
+    <!-- Run global_planner -->
+    <include file="$(find rto_global_planner)/launch/global_planner_bi.launch"/>
+ 
+    <!-- Run rto_safety_node -->
+    <group if="$(arg safety)">
+        <include file="$(find rto_safety)/launch/rto_safety_node.launch"/>    
+    </group>
+</launch>

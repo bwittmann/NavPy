@@ -1,0 +1,46 @@
+# Log execution times of critical operations.
+log_times: False
+
+# Return debugging messages to the terminal.
+debug_mode: False
+
+# Show a representation of the local path in rviz.
+show_path: True
+
+# Lookahead for motion update.
+lookahead: 3 #2.5
+
+robot_diameter: 0.45
+safety_distance: 0.15
+
+# Min and max velocity values of the rto.
+min_linear_vel: 0 # Unit: m/s
+max_linear_vel: 0.2 # Unit: m/s
+min_angular_vel: -0.7 # Unit: rad/s
+max_angular_vel: 0.7  # Unit: rad/s
+
+# Max acceleration and deceleration that can be achieved by the rto.
+max_acc: 0.3 # Unit: m/s^2, rad/s^2
+max_dec: 0.4 # Unit: m/s^2, rad/s^2
+
+# Resolution of the dynamic window.
+res_ang_vel_space: 10
+res_lin_vel_space: 10
+
+# Gain factors for calculation of the cost for each trajectory.
+gain_vel: 24
+gain_goal_angle: 2
+gain_glob_path: 80
+gain_clearance: 1
+
+# Parameters for recovery behaviours.
+rec_min_lin_vel: 0.023
+rec_min_lin_vel_time: 5 # Unit s
+
+rec_circling_time: 20 # Unit s
+
+rec_path_time_factor: 0.5 
+rec_path_length: 30
+
+# Distance to goal that is enough to declare goal reached.
+min_dist_goal: 0.1

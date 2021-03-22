@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Core parameters -->
+    <arg name="robot" default="$(env ROBOT)" doc="Robot type [rto-1]"/>
+    <arg name="robot_env" default="$(env ROBOT_ENV)" doc="Robot type [rto-1]"/>
+    <arg name="robot_ip" default="0.0.0.0" />
+
+    <!-- Movement parameters -->
+    <arg name="max_linear_velocity" default="0.3" />
+
+
+    <!-- Start-up core components to communicate with the robot and move it -->
+    <include file="$(find rto_bringup)/launch/components/base.xml">
+        <arg name="robot" value="$(arg robot)"/>
+        <arg name="robot_ip" value="$(arg robot_ip)"/>
+        <arg name="max_linear_velocity" value="$(arg max_linear_velocity)"/>
+    </include>
+    
+</launch>

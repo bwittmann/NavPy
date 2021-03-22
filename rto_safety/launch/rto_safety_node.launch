@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="rto_safety" type="rto_safety_node" name="rto_safety_node" output="screen">
+    <param name="outer_major_radius" value="0.70"/>
+    <param name="outer_minor_radius" value="0.30"/>
+    <param name="inner_major_radius" value="0.40"/>
+    <param name="inner_minor_radius" value="0.25"/>
+  </node>
+</launch>
